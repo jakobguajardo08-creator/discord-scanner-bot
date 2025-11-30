@@ -3,16 +3,16 @@
 daily_scan.py
 
 Discord bot for Roblox development group:
-- Daily reset of channels & roles with dynamic emojis
-- Fun facts and daily events
-- Nuke detection
-- Message scanning (toxic/NSFW/suspicious code)
+- Deletes all channels & categories daily
+- Restores channels & categories with dynamic emojis
+- Posts fun facts & today's events
+- Detects nukes
+- Scans messages for toxic, NSFW, and suspicious content
 """
 
 import os, json, io, sys, asyncio, random, re
 from datetime import datetime
 import discord
-from discord import Permissions
 from discord.utils import get
 import requests
 from bs4 import BeautifulSoup
@@ -33,7 +33,6 @@ NSFW_THRESHOLD = 0.75
 SCAN_IMAGE_TYPES = (".png",".jpg",".jpeg",".gif",".webp")
 NUKE_DELETION_THRESHOLD = 0.1
 NUKE_CREATION_THRESHOLD = 10
-
 SUSPICIOUS_PATTERNS = [
     r"(api_key|secret|token)\s*[:=]\s*[A-Za-z0-9_\-]{8,}",
     r"exec\(",
@@ -42,7 +41,6 @@ SUSPICIOUS_PATTERNS = [
     r"curl .* --output",
     r"powershell .* -EncodedCommand"
 ]
-
 SEASONAL_EMOJIS = {"🎃":[10,11], "🎄":[12], "💖":[2], "🌸":[3,4]}
 REPORT = {"toxic_messages":[],"nsfw_attachments":[],"suspicious_code":[],"nuke_events":[],"restoration_actions":[],"decorations":[]}
 
@@ -68,9 +66,9 @@ client = discord.Client(intents=intents)
 def load_json(path): return json.load(open(path,"r",encoding="utf-8")) if os.path.exists(path) else {}
 def save_json(path,data): json.dump(data,open(path,"w",encoding="utf-8"),ensure_ascii=False,indent=2)
 def get_dynamic_emoji():
-    m = datetime.utcnow().month
+    month = datetime.utcnow().month
     for e,months in SEASONAL_EMOJIS.items():
-        if m in months: return e
+        if month in months: return e
     return "🔹"
 def pick_daily_fact():
     data = load_json(FUN_FACTS_FILE)
@@ -110,17 +108,32 @@ def run_model_on_image_bytes(data):
         return float(probs[1]) if len(probs)>1 else float(probs.max())
     except: return 0.0
 
+# ---------------- DELETE ALL ----------------
+async def delete_all_channels_categories(guild):
+    for ch in guild.channels:
+        try: await ch.delete()
+        except: pass
+    for cat in guild.categories:
+        try: await cat.delete()
+        except: pass
+
 # ---------------- RESTORE ----------------
 async def restore_channels_roles_dynamic(guild, default_data):
     emoji = get_dynamic_emoji()
-    category_map = {}
+    # Delete everything first
+    await delete_all_channels_categories(guild)
+    
     # Create categories
+    category_map = {}
     for cat in default_data.get("categories", []):
         name = cat["name"].replace("{emoji}", emoji)
-        try: category_map[cat["name"]] = await guild.create_category(name)
+        try:
+            created_category = await guild.create_category(name)
+            category_map[cat["name"]] = created_category
         except: continue
+
     # Create channels
-    created_names=set()
+    created_names = set()
     for ch in default_data.get("channels", []):
         channel_name = ch["name"].replace("{emoji}", emoji)
         if channel_name in created_names: continue
