@@ -1,0 +1,45 @@
+name: Daily Discord Server Scan & Recovery
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # every day at 00:00 UTC
+  workflow_dispatch:       # allow manual runs
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 140
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily scan
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ secrets.GUILD_ID }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          python daily_scan.py
+
+      - name: Upload scan report artifact (if generated)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: discord-scan-report
+          path: |
+            scan_report_*.json
+            backup_*.json
