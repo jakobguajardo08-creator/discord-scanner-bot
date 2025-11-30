@@ -1,45 +1,32 @@
-name: Daily Discord Server Scan & Recovery
+name: Daily Discord Scan
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # every day at 00:00 UTC
-  workflow_dispatch:       # allow manual runs
+    - cron: '0 12 * * *'  # Runs every day at 12:00 UTC
+  workflow_dispatch:  # Allows manual trigger
 
 jobs:
-  scan:
+  run-bot:
     runs-on: ubuntu-latest
-    timeout-minutes: 140
+    env:
+      DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+      GUILD_ID: ${{ secrets.GUILD_ID }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: true
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+    - name: Upgrade pip
+      run: python -m pip install --upgrade pip
 
-      - name: Run daily scan
-        env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          GUILD_ID: ${{ secrets.GUILD_ID }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          python daily_scan.py
+    - name: Install dependencies
+      run: |
+        pip install --no-cache-dir discord.py requests bs4 torch torchvision transformers Pillow
 
-      - name: Upload scan report artifact (if generated)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: discord-scan-report
-          path: |
-            scan_report_*.json
-            backup_*.json
+    - name: Run daily scan
+      run: python daily_scan.py
