@@ -3,3 +3,4 @@ transformers==4.35.0
 torch
 Pillow
 requests
+beautifulsoup4
