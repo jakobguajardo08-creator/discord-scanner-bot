@@ -2,9 +2,9 @@
 """
 daily_scan.py
 
-Discord bot for:
-- Daily reset and restore of channels with dynamic emojis
-- Posting fun facts and today's events
+Discord bot for Roblox development group:
+- Daily reset of channels & roles with dynamic emojis
+- Fun facts and daily events
 - Nuke detection
 - Message scanning (toxic/NSFW/suspicious code)
 """
@@ -26,12 +26,14 @@ GUILD_ID = int(os.getenv("GUILD_ID")) if os.getenv("GUILD_ID") else None
 BACKUP_FILE = "guild_backup.json"
 FUN_FACTS_FILE = "daily_facts.json"
 DEFAULT_CHANNELS_FILE = "default_channels.json"
+
 MAX_MESSAGES = 200
 TOXIC_THRESHOLD = 0.5
 NSFW_THRESHOLD = 0.75
-SCAN_IMAGE_TYPES = (".png", ".jpg", ".jpeg", ".gif", ".webp")
+SCAN_IMAGE_TYPES = (".png",".jpg",".jpeg",".gif",".webp")
 NUKE_DELETION_THRESHOLD = 0.1
 NUKE_CREATION_THRESHOLD = 10
+
 SUSPICIOUS_PATTERNS = [
     r"(api_key|secret|token)\s*[:=]\s*[A-Za-z0-9_\-]{8,}",
     r"exec\(",
@@ -40,6 +42,7 @@ SUSPICIOUS_PATTERNS = [
     r"curl .* --output",
     r"powershell .* -EncodedCommand"
 ]
+
 SEASONAL_EMOJIS = {"🎃":[10,11], "🎄":[12], "💖":[2], "🌸":[3,4]}
 REPORT = {"toxic_messages":[],"nsfw_attachments":[],"suspicious_code":[],"nuke_events":[],"restoration_actions":[],"decorations":[]}
 
@@ -111,25 +114,27 @@ def run_model_on_image_bytes(data):
 async def restore_channels_roles_dynamic(guild, default_data):
     emoji = get_dynamic_emoji()
     category_map = {}
-    # Categories
-    for cat in default_data.get("categories",[]):
-        name = cat["name"].replace("{emoji}",emoji)
+    # Create categories
+    for cat in default_data.get("categories", []):
+        name = cat["name"].replace("{emoji}", emoji)
         try: category_map[cat["name"]] = await guild.create_category(name)
         except: continue
-    # Channels
+    # Create channels
     created_names=set()
-    for ch in default_data.get("channels",[]):
-        name=ch["name"].replace("{emoji}",emoji)
-        if name in created_names: continue
-        category = category_map.get(ch.get("category"))
+    for ch in default_data.get("channels", []):
+        channel_name = ch["name"].replace("{emoji}", emoji)
+        if channel_name in created_names: continue
+        category_obj = category_map.get(ch.get("category"))
         try:
             if ch["type"]=="text":
-                await guild.create_text_channel(name=name,
+                await guild.create_text_channel(
+                    name=channel_name,
                     topic=ch.get("topic"),
                     nsfw=ch.get("nsfw",False),
                     slowmode_delay=ch.get("slowmode_delay",0),
-                    category=category)
-                created_names.add(name)
+                    category=category_obj
+                )
+                created_names.add(channel_name)
         except: continue
 
 # ---------------- MESSAGE SCAN ----------------
@@ -169,7 +174,7 @@ async def post_daily_info(guild):
     events=fetch_today_events()
     info_channel=get(guild.text_channels,name="daily-info")
     if not info_channel:
-        try: info_channel=await guild.create_text_channel("daily-info",topic="Daily facts & news")
+        try: info_channel=await guild.create_text_channel("daily-info",topic="Daily fun facts & events")
         except: return
     try:
         await info_channel.send(f"📅 **Daily Fun Fact:** {daily_fact}")
