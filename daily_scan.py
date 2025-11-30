@@ -6,6 +6,8 @@ Daily Discord server scanner & recovery tool.
 - Scans for toxic messages, NSFW attachments, suspicious code.
 - Detects server nukes and restores channels/roles from backup.
 - Adds seasonal decorations (emoji) to channels/roles.
+- Deletes and restores channels daily.
+- Sends a fun fact about the current day.
 """
 
 import os
@@ -20,6 +22,7 @@ from datetime import datetime
 
 import discord
 from discord import Permissions
+from discord.utils import get
 
 # HuggingFace models
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoFeatureExtractor, AutoModelForImageClassification
@@ -160,7 +163,6 @@ async def decorate_channels_and_roles(guild):
     if not emoji:
         return
     try:
-        # Add emoji to text channels
         for ch in guild.text_channels:
             if not ch.name.startswith(emoji):
                 new_name = f"{emoji}-{ch.name}"
@@ -169,7 +171,6 @@ async def decorate_channels_and_roles(guild):
                     REPORT["decorations"].append({"channel": ch.name, "new_name": new_name})
                 except Exception:
                     continue
-        # Add emoji to roles
         for role in guild.roles:
             if role.name not in ["@everyone"] and not role.name.startswith(emoji):
                 new_name = f"{emoji}-{role.name}"
@@ -180,6 +181,63 @@ async def decorate_channels_and_roles(guild):
                     continue
     except Exception as e:
         print("Decoration error:", e)
+
+# ---------------- DAILY FUN FACT ----------------
+def get_today_fact():
+    """Return a fun historical fact for today."""
+    today = datetime.utcnow()
+    month, day = today.month, today.day
+    try:
+        r = requests.get(f"http://numbersapi.com/{month}/{day}/date?json")
+        if r.status_code == 200:
+            data = r.json()
+            return data.get("text", "No fact found for today.")
+    except Exception as e:
+        print("Fun fact fetch error:", e)
+    return "No fun fact available today."
+
+async def send_daily_fun_fact(guild):
+    fact = get_today_fact()
+    target = get(guild.text_channels, name="general")
+    if not target and guild.text_channels:
+        target = guild.text_channels[0]
+    if target:
+        try:
+            await target.send(f"📅 **Daily Fun Fact:** {fact}")
+        except Exception:
+            pass
+
+# ---------------- DAILY CHANNEL RESET ----------------
+async def reset_and_restore_channels(guild, snapshot):
+    """Delete all channels and restore from snapshot."""
+    print("Resetting channels for daily refresh...")
+    for ch in guild.text_channels:
+        try:
+            await ch.delete(reason="Daily reset")
+        except Exception:
+            continue
+
+    # Restore channels
+    for ch_info in snapshot.get("channels", []):
+        if ch_info["type"] != "text":
+            continue
+        try:
+            category = None
+            if ch_info.get("category_id"):
+                category_obj = guild.get_channel(ch_info["category_id"])
+                if category_obj and isinstance(category_obj, discord.CategoryChannel):
+                    category = category_obj
+            await guild.create_text_channel(
+                name=ch_info["name"][:100],
+                topic=ch_info.get("topic"),
+                nsfw=ch_info.get("nsfw", False),
+                slowmode_delay=ch_info.get("slowmode_delay", 0),
+                category=category,
+                reason="Daily channel restore"
+            )
+        except Exception:
+            continue
+    print("Channels restored.")
 
 # ---------------- SCANNER ----------------
 async def scan_guild(guild):
@@ -212,7 +270,6 @@ async def scan_guild(guild):
         async for msg in ch.history(limit=MAX_MESSAGES_PER_CHANNEL, oldest_first=False):
             if msg.author.bot:
                 continue
-
             # Text toxicity
             if msg.content:
                 toxic, scores = is_text_toxic(msg.content)
@@ -308,12 +365,25 @@ async def on_ready():
             await client.close()
             return
         print(f"Connected as {client.user}, scanning {guild.name}")
+
+        snapshot = load_backup()
+
+        # Daily channel reset
+        await reset_and_restore_channels(guild, snapshot)
+
+        # Scan guild for toxic content, NSFW, suspicious code
         await scan_guild(guild)
+
+        # Send daily fun fact
+        await send_daily_fun_fact(guild)
+
+        # Save backup after daily reset
+        save_backup_locally(snapshot)
 
         outname = f"scan_report_{GUILD_ID}_{int(time.time())}.json"
         with open(outname, "w", encoding="utf-8") as of:
             json.dump(REPORT, of, ensure_ascii=False, indent=2)
-        print("Report written to", outname)
+        print("Daily tasks completed. Report saved to", outname)
 
     except Exception as e:
         print("Main error:", e)
