@@ -29,8 +29,8 @@ from PIL import Image
 import requests
 
 # ---------- CONFIG ----------
-DISCORD_TOKEN = os.getenv("MTQxNjU0MDU1MTg5Njg5NTYxMA.GNi2-B.4SoiAT0qISKRsJf4IvyV0yFF-XdjhoNhw2-chI")
-GUILD_ID = int(os.getenv("1416539232759058552")) if os.getenv("1416539232759058552") else None
+DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+GUILD_ID = int(os.getenv("GUILD_ID")) if os.getenv("GUILD_ID") else None
 BACKUP_FILENAME = f"backup_{GUILD_ID}.json" if GUILD_ID else "backup_unknown.json"
 COMMIT_BACKUP = True  # GitHub Action will have GITHUB_TOKEN available
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")  # used for committing updated backup
