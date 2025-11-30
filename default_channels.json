@@ -1,10 +1,10 @@
 {
   "categories": [
-    {"name": "{emoji}-Community"},
-    {"name": "{emoji}-Development"},
-    {"name": "{emoji}-Testing"},
-    {"name": "{emoji}-Resources"},
-    {"name": "{emoji}-Announcements"}
+    {"name": "Community"},
+    {"name": "Development"},
+    {"name": "Testing"},
+    {"name": "Resources"},
+    {"name": "Announcements"}
   ],
   "channels": [
     {"name": "{emoji}-general", "type": "text", "category": "Community", "topic": "Main chat for everyone", "nsfw": false},
