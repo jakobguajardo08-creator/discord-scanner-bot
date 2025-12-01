@@ -1,6 +1,7 @@
 discord.py==2.3.2
-transformers==4.35.0
-torch
-Pillow
 requests
 beautifulsoup4
+transformers==4.39.3
+torch
+Pillow
+bs4
