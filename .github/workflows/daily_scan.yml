@@ -1,32 +1,31 @@
-name: Daily Discord Scan
+name: Daily Reset & News
 
 on:
   schedule:
-    - cron: '0 12 * * *'  # Runs every day at 12:00 UTC
-  workflow_dispatch:  # Allows manual trigger
+    - cron: '0 12 * * *'  # daily at 12:00 UTC
+  workflow_dispatch:
 
 jobs:
-  run-bot:
+  daily:
     runs-on: ubuntu-latest
     env:
       DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
       GUILD_ID: ${{ secrets.GUILD_ID }}
-
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v3
-
+    - uses: actions/checkout@v4
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: "3.11"
-
-    - name: Upgrade pip
-      run: python -m pip install --upgrade pip
-
-    - name: Install dependencies
+    - name: Install deps
       run: |
-        pip install --no-cache-dir discord.py requests bs4 torch torchvision transformers Pillow
-
-    - name: Run daily scan
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    - name: Run daily_scan
       run: python daily_scan.py
+    - name: Upload dashboard (if any)
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: daily-dashboard
+        path: dashboard.html
