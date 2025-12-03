@@ -185,7 +185,7 @@ async def post_daily(guild):
     combined = merge_unbiased(reddit_top() + hackernews_top() + ap_news())
     summary = summarize_stories(combined)
 
-    await ch.send("📰 **Daily Unbiased Summary**")
+    await ch.send("AI Daily News Summary (from Reddit):")
     await ch.send(summary)
 
 # ---------------- MAIN ----------------
