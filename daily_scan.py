@@ -1,283 +1,210 @@
 #!/usr/bin/env python3
 """
-daily_scan.py
+daily_scan.py — Lightweight Discord Daily Maintenance Bot
 
-Discord bot for Roblox development group:
-- Deletes all channels & categories daily
-- Restores channels & categories with dynamic emojis
-- Posts AI summarized Reddit news
-- Detects nukes
-- Scans messages for toxic, NSFW, and suspicious content
+Features:
+- Deletes ONLY channels/categories not in default configuration (anti-nuke recovery)
+- Deletes toxic, NSFW, controversial, extremist, or harmful messages
+- Summarizes unbiased daily news from multiple sources
+- Fast execution, optimized for GitHub CI runners
 """
 
-import os, json, io, sys, asyncio, random, re
+import os, json, io, sys, asyncio, re
 from datetime import datetime
 import discord
-from discord.utils import get
 import requests
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoFeatureExtractor, AutoModelForImageClassification, pipeline, AutoModelForSeq2SeqLM, AutoTokenizer as AutoTokenizerSumm
 import torch
 from PIL import Image
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoFeatureExtractor, AutoModelForImageClassification, pipeline
 
 # ---------------- CONFIG ----------------
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
 GUILD_ID = int(os.getenv("GUILD_ID")) if os.getenv("GUILD_ID") else None
-BACKUP_FILE = "guild_backup.json"
+
 DEFAULT_CHANNELS_FILE = "default_channels.json"
+SCAN_LIMIT = 150
 
-MAX_MESSAGES = 200
-TOXIC_THRESHOLD = 0.5
-NSFW_THRESHOLD = 0.75
-SCAN_IMAGE_TYPES = (".png",".jpg",".jpeg",".gif",".webp")
-NUKE_DELETION_THRESHOLD = 0.1
-NUKE_CREATION_THRESHOLD = 10
-SUSPICIOUS_PATTERNS = [
-    r"(api_key|secret|token)\s*[:=]\s*[A-Za-z0-9_\-]{8,}",
-    r"exec\(",
-    r"eval\(",
-    r"base64\.b64decode",
-    r"curl .* --output",
-    r"powershell .* -EncodedCommand"
+TOXIC_THRESHOLD = 0.48
+NSFW_THRESHOLD = 0.70
+
+SCAN_IMAGE_TYPES = (".png", ".jpg", ".jpeg", ".webp")
+
+# Controversial / extremist / political spikes
+CONTROVERSIAL_PATTERNS = [
+    r"\b(hitler|nazi|heil)\b",
+    r"\bKKK\b",
+    r"\bright-wing|left-wing|extremist\b",
+    r"\bgenocide\b",
+    r"\bdoxxing\b",
+    r"\bterror(ist|ism)\b",
 ]
-SEASONAL_EMOJIS = {"🎃":[10,11], "🎄":[12], "💖":[2], "🌸":[3,4]}
 
-REPORT = {
-    "toxic_messages":[],
-    "nsfw_attachments":[],
-    "suspicious_code":[],
-    "nuke_events":[],
-    "restoration_actions":[],
-    "decorations":[]
-}
-
-if not DISCORD_TOKEN or not GUILD_ID:
-    print("DISCORD_TOKEN or GUILD_ID not set", file=sys.stderr)
-    sys.exit(2)
-
-# ---------------- MODELS ----------------
+# ---------------- MODELS (lightweight versions) ----------------
 txt_tokenizer = AutoTokenizer.from_pretrained("unitary/toxic-bert")
 txt_model = AutoModelForSequenceClassification.from_pretrained("unitary/toxic-bert")
-TOXIC_LABELS = ["toxic","severe_toxic","obscene","threat","insult","identity_hate"]
 
 img_extractor = AutoFeatureExtractor.from_pretrained("Falconsai/nsfw_image_detection")
 img_model = AutoModelForImageClassification.from_pretrained("Falconsai/nsfw_image_detection")
 
-# Summarization pipeline (BART large)
-summarizer = pipeline("summarization", model="facebook/bart-large-cnn", framework="pt")
+# Lightweight summarizer
+summarizer = pipeline("summarization",
+                      model="sshleifer/distilbart-cnn-12-6",
+                      framework="pt")
 
-# ---------------- CLIENT ----------------
 intents = discord.Intents.default()
 intents.guilds = True
 intents.messages = True
 intents.message_content = True
 client = discord.Client(intents=intents)
 
-# ---------------- UTILITIES ----------------
+# ---------------- UTIL ----------------
 def load_json(path):
-    return json.load(open(path,"r",encoding="utf-8")) if os.path.exists(path) else {}
+    return json.load(open(path, "r", encoding="utf-8")) if os.path.exists(path) else {}
 
-def save_json(path,data):
-    json.dump(data,open(path,"w",encoding="utf-8"),ensure_ascii=False,indent=2)
+def is_toxic(text):
+    inputs = txt_tokenizer(text, return_tensors="pt", truncation=True, max_length=256)
+    outputs = txt_model(**inputs)
+    probs = torch.sigmoid(outputs.logits)[0].detach().cpu().numpy()
+    return max(probs) >= TOXIC_THRESHOLD
 
-def get_dynamic_emoji():
-    month = datetime.utcnow().month
-    for e,months in SEASONAL_EMOJIS.items():
-        if month in months: return e
-    return "🔹"
+def is_controversial(text):
+    for p in CONTROVERSIAL_PATTERNS:
+        if re.search(p, text, re.IGNORECASE):
+            return True
+    return False
 
-# ---------------- REDDIT FETCH ----------------
-def fetch_reddit_news(subreddit="worldnews", limit=15):
-    url = f"https://www.reddit.com/r/{subreddit}/top.json?limit={limit}&t=day"
-    headers = {"User-Agent": "DiscordBot-NewsFetcher/1.0"}
+def is_nsfw_image(data):
+    img = Image.open(io.BytesIO(data)).convert("RGB")
+    inputs = img_extractor(images=img, return_tensors="pt")
+    outputs = img_model(**inputs)
+    probs = torch.softmax(outputs.logits, dim=1)[0].detach().cpu().numpy()
+    return float(probs[1]) >= NSFW_THRESHOLD
+
+# ---------------- NEWS FETCH ----------------
+def reddit_top():
     try:
-        r = requests.get(url, headers=headers, timeout=10)
-        data = r.json()
-        posts = []
-        for p in data["data"]["children"]:
-            title = p["data"]["title"]
-            posts.append(title)
-        return posts
+        r = requests.get("https://www.reddit.com/r/worldnews/top.json?limit=10&t=day",
+                         headers={"User-Agent": "NewsBot"}, timeout=8)
+        return [p["data"]["title"] for p in r.json()["data"]["children"]]
     except:
-        return ["Unable to fetch Reddit news today."]
+        return []
 
-def summarize_news(headlines):
-    text = " ".join(headlines)
+def hackernews_top():
     try:
-        summary = summarizer(text, max_length=150, min_length=50, do_sample=False)[0]["summary_text"]
-        return summary
+        r = requests.get("https://hacker-news.firebaseio.com/v0/topstories.json", timeout=8)
+        ids = r.json()[:10]
+        titles = []
+        for i in ids:
+            item = requests.get(f"https://hacker-news.firebaseio.com/v0/item/{i}.json", timeout=5).json()
+            if item and "title" in item: titles.append(item["title"])
+        return titles
     except:
-        return "Unable to summarize news today."
+        return []
 
-# ---------------- TEXT SCAN ----------------
-def run_model_on_text(text):
+def ap_news():
     try:
-        inputs = txt_tokenizer(text, return_tensors="pt", truncation=True, max_length=512)
-        outputs = txt_model(**inputs)
-        probs = torch.sigmoid(outputs.logits)[0].detach().cpu().numpy()
-        return {label: float(probs[i]) for i,label in enumerate(TOXIC_LABELS)}
-    except: return {label:0.0 for label in TOXIC_LABELS}
+        r = requests.get("https://feeds.apnews.com/apf-topnews", timeout=8)
+        return re.findall(r"<title>(.*?)</title>", r.text)[1:11]
+    except:
+        return []
 
-def is_text_toxic(text):
-    res = run_model_on_text(text)
-    for _,score in res.items():
-        if score>=TOXIC_THRESHOLD: return True,res
-    return False,res
+def merge_unbiased(stories):
+    unique = []
+    for s in stories:
+        if not any(s.lower() in o.lower() or o.lower() in s.lower() for o in unique):
+            unique.append(s)
+    return unique
 
-def suspicious_code_check(text):
-    for pat in SUSPICIOUS_PATTERNS:
-        if re.search(pat,text,re.IGNORECASE): return pat
-    return None
-
-# ---------------- IMAGE SCAN ----------------
-def run_model_on_image_bytes(data):
+def summarize_stories(stories):
+    text = " ".join(stories)
     try:
-        img = Image.open(io.BytesIO(data)).convert("RGB")
-        inputs = img_extractor(images=img, return_tensors="pt")
-        outputs = img_model(**inputs)
-        probs = torch.softmax(outputs.logits, dim=1)[0].detach().cpu().numpy()
-        return float(probs[1]) if len(probs)>1 else float(probs.max())
-    except: return 0.0
-
-# ---------------- DELETE ALL ----------------
-async def delete_all_channels_categories(guild):
-    for ch in guild.channels:
-        try: await ch.delete()
-        except: pass
-    for cat in guild.categories:
-        try: await cat.delete()
-        except: pass
+        return summarizer(text, max_length=140, min_length=50, do_sample=False)[0]["summary_text"]
+    except:
+        return "Unable to summarize today's world news."
 
 # ---------------- RESTORE ----------------
-async def restore_channels_roles_dynamic(guild, default_data):
-    emoji = get_dynamic_emoji()
-    await delete_all_channels_categories(guild)
-    category_map = {}
-    for cat in default_data.get("categories", []):
-        name = cat["name"].replace("{emoji}", emoji)
-        try: created_category = await guild.create_category(name)
-        except: continue
-        category_map[cat["name"]] = created_category
-    created_names = set()
-    for ch in default_data.get("channels", []):
-        channel_name = ch["name"].replace("{emoji}", emoji)
-        if channel_name in created_names: continue
-        category_obj = category_map.get(ch.get("category"))
-        try:
-            if ch["type"]=="text":
-                await guild.create_text_channel(
-                    name=channel_name,
-                    topic=ch.get("topic"),
-                    nsfw=ch.get("nsfw",False),
-                    slowmode_delay=ch.get("slowmode_delay",0),
-                    category=category_obj
-                )
-                created_names.add(channel_name)
-        except: continue
+async def restore_structure(guild, default):
+    allowed_cats = {c["name"] for c in default.get("categories", [])}
+    allowed_channels = {c["name"] for c in default.get("channels", [])}
 
-# ---------------- MESSAGE SCAN ----------------
+    # Delete anything that does NOT belong
+    for ch in guild.channels:
+        if ch.name not in allowed_channels and ch.category and ch.category.name not in allowed_cats:
+            try: await ch.delete()
+            except: pass
+
+    for cat in guild.categories:
+        if cat.name not in allowed_cats:
+            try: await cat.delete()
+            except: pass
+
+    # Recreate if needed
+    name_to_cat = {}
+    for c in default.get("categories", []):
+        existing = discord.utils.get(guild.categories, name=c["name"])
+        if existing: 
+            name_to_cat[c["name"]] = existing
+        else:
+            name_to_cat[c["name"]] = await guild.create_category(c["name"])
+
+    for c in default.get("channels", []):
+        if not discord.utils.get(guild.channels, name=c["name"]):
+            parent = name_to_cat.get(c.get("category"))
+            await guild.create_text_channel(c["name"], category=parent)
+
+# ---------------- SCAN ----------------
 async def scan_messages(guild):
     for ch in guild.text_channels:
         perms = ch.permissions_for(guild.me)
-        if not perms.read_messages or not perms.read_message_history: continue
-        async for msg in ch.history(limit=MAX_MESSAGES,oldest_first=False):
+        if not perms.read_messages: continue
+
+        async for msg in ch.history(limit=SCAN_LIMIT):
             if msg.author.bot: continue
+
+            # TEXT CHECK
             if msg.content:
-                toxic,scores = is_text_toxic(msg.content)
-                if toxic:
-                    REPORT["toxic_messages"].append({
-                        "channel": ch.name,
-                        "author": str(msg.author),
-                        "snippet": msg.content[:300],
-                        "scores": scores
-                    })
+                if is_toxic(msg.content) or is_controversial(msg.content):
                     try: await msg.delete()
                     except: pass
-                pat = suspicious_code_check(msg.content)
-                if pat:
-                    REPORT["suspicious_code"].append({
-                        "channel": ch.name,
-                        "author": str(msg.author),
-                        "pattern": pat,
-                        "snippet": msg.content[:300]
-                    })
+                    continue
+
+            # IMAGE CHECK
             for att in msg.attachments:
                 if any(att.filename.lower().endswith(ext) for ext in SCAN_IMAGE_TYPES):
-                    data = None
-                    try: data = await att.read()
-                    except:
-                        try:
-                            r = requests.get(att.url, timeout=10)
-                            if r.status_code==200: data=r.content
-                        except: data=None
-                    if data:
-                        nsfw_score = run_model_on_image_bytes(data)
-                        if nsfw_score>=NSFW_THRESHOLD:
-                            REPORT["nsfw_attachments"].append({
-                                "channel": ch.name,
-                                "author": str(msg.author),
-                                "attachment": att.url,
-                                "score": nsfw_score
-                            })
-                            try: await msg.delete()
-                            except: pass
+                    data = await att.read()
+                    if is_nsfw_image(data):
+                        try: await msg.delete()
+                        except: pass
 
-# ---------------- DAILY NEWS ----------------
-async def post_daily_info(guild):
-    channel = get(guild.text_channels, name="daily-info")
-    if not channel:
-        try:
-            channel = await guild.create_text_channel("daily-info", topic="AI-generated daily news summary")
-        except: return
-    try:
-        headlines = fetch_reddit_news()
-        summary = summarize_news(headlines)
-        await channel.send("📰 **AI Daily News Summary (from Reddit):**")
-        await channel.send(summary)
-    except: pass
+# ---------------- DAILY INFO ----------------
+async def post_daily(guild):
+    ch = discord.utils.get(guild.text_channels, name="daily-info")
+    if not ch:
+        ch = await guild.create_text_channel("daily-info")
 
-# ---------------- NUKE DETECTION ----------------
-async def detect_nuke(guild):
-    prev = load_json(BACKUP_FILE)
-    old_channels = prev.get("channels",[])
-    curr = guild.channels
-    deleted = max(0,len(old_channels)-len([ch for ch in curr if ch.name in [c.get("name") for c in old_channels]]))
-    created = max(0,len(curr)-len(old_channels))
-    if deleted>max(1,int(len(old_channels)*NUKE_DELETION_THRESHOLD)) and created>=NUKE_CREATION_THRESHOLD:
-        REPORT["nuke_events"].append({
-            "deleted_count": deleted,
-            "created_count": created,
-            "timestamp": datetime.utcnow().isoformat()
-        })
-        print("NUKE detected!")
+    combined = merge_unbiased(reddit_top() + hackernews_top() + ap_news())
+    summary = summarize_stories(combined)
+
+    await ch.send("📰 **Daily Unbiased Summary**")
+    await ch.send(summary)
 
 # ---------------- MAIN ----------------
 @client.event
 async def on_ready():
-    try:
-        guild = client.get_guild(GUILD_ID)
-        if not guild: await client.close(); return
-        default_data = load_json(DEFAULT_CHANNELS_FILE)
-        await detect_nuke(guild)
-        await restore_channels_roles_dynamic(guild,default_data)
-        await scan_messages(guild)
-        await post_daily_info(guild)
-        snapshot = {"roles":[],"channels":[]}
-        for role in guild.roles:
-            snapshot["roles"].append({
-                "name":role.name,
-                "permissions":role.permissions.value,
-                "hoist":role.hoist,
-                "mentionable":role.mentionable
-            })
-        for ch in guild.channels:
-            ch_info={"name":ch.name,"type":str(ch.type),"position":ch.position}
-            if isinstance(ch,discord.TextChannel):
-                ch_info.update({"topic":ch.topic,"nsfw":ch.nsfw,"slowmode_delay":ch.slowmode_delay})
-            snapshot["channels"].append(ch_info)
-        save_json(BACKUP_FILE,snapshot)
-        print("Daily tasks completed.")
-    except Exception as e: print("Error:",e)
-    finally: await client.close(); sys.exit(0)
+    guild = client.get_guild(GUILD_ID)
+    if not guild:
+        await client.close()
+        return
 
-if __name__=="__main__":
+    default = load_json(DEFAULT_CHANNELS_FILE)
+
+    await restore_structure(guild, default)
+    await scan_messages(guild)
+    await post_daily(guild)
+
+    print("Daily tasks complete.")
+    await client.close()
+    sys.exit(0)
+
+if __name__ == "__main__":
     client.run(DISCORD_TOKEN)
