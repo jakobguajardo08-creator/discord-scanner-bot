@@ -63,7 +63,7 @@ jobs:
 
       - name: Run daily bot
         run: |
-          python daily_scan_rewrite.py
+          python daily_scan.py
 
       - name: Upload reports
         if: always()
