@@ -1,9 +1,25 @@
-name: Daily Reset & News
+name: Daily Reset & Word of the Day
 
 on:
   schedule:
     - cron: '0 12 * * *'  # daily at 12:00 UTC
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Run in DRY_RUN mode (no deletes/renames/posts)"
+        required: false
+        default: "0"
+      enable_rename:
+        description: "Enable themed channel renames"
+        required: false
+        default: "1"
+
+concurrency:
+  group: daily-discord-bot
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   daily:
@@ -11,21 +27,56 @@ jobs:
     env:
       DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
       GUILD_ID: ${{ secrets.GUILD_ID }}
+
+      # Safety toggles (can be overridden by workflow_dispatch inputs)
+      DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
+      ENABLE_RENAME: ${{ github.event.inputs.enable_rename || '1' }}
+
+      # Rename behavior safety rails
+      RENAME_MODE: "prefix"     # prefix | suffix
+      MAX_RENAMES: "40"         # cap per run
+      # Example: skip renaming rules/announcements/logs
+      RENAME_EXCLUDE_REGEX: "^(rules|announcements|mod-log|audit-log)$"
+
+      # Moderation tunables
+      MAX_MESSAGES: "250"
+      TOXIC_THRESHOLD: "0.6"
+      NSFW_THRESHOLD: "0.8"
+
+      # Files persisted as artifacts
+      BACKUP_FILE: "guild_backup.json"
+      REPORT_FILE: "mod_report.json"
+
     steps:
-    - uses: actions/checkout@v4
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: "3.11"
-    - name: Install deps
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-    - name: Run daily_scan
-      run: python daily_scan.py
-    - name: Upload dashboard (if any)
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: daily-dashboard
-        path: dashboard.html
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run daily bot
+        run: |
+          python daily_scan_rewrite.py
+
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-reports
+          path: |
+            mod_report.json
+            guild_backup.json
+
+      - name: Upload dashboard (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-dashboard
+          path: dashboard.html
