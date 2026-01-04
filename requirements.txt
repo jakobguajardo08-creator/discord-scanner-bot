@@ -1,7 +1,11 @@
-discord.py==2.3.2
-requests==2.32.3
-Pillow==10.2.0
-torch==2.1.0
-transformers==4.38.1
-tokenizers==0.15.1
-numpy==1.26.4
+# LuCha (Discord Scanner + Word of the Day)
+# Core runtime
+discord.py==2.4.0
+aiohttp==3.10.10
+
+# Quality-of-life / reliability
+python-dotenv==1.0.1
+tenacity==9.0.0
+
+# Optional: nice structured logs (recommended)
+python-json-logger==2.0.7
