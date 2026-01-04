@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-daily_scan_rewrite.py (holiday-word edition)
+daily_scan.py (holiday-word edition)
 
 Discord moderation + immersive daily flavor bot:
 - Conservative mod actions (toxic/NSFW/credential leaks/malicious code)
@@ -122,7 +122,7 @@ if not DISCORD_TOKEN or not GUILD_ID:
 
 # ---------------- logging ----------------
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-log = logging.getLogger("daily_scan_rewrite")
+log = logging.getLogger("daily_scan.py")
 
 # ---------------- ML model setup (graceful) ----------------
 txt_model = None
