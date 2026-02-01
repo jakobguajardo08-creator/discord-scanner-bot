@@ -1,6 +1,94 @@
 {
   "categories": [
-    {"name": "Community"},
+    {"name": "Community{
+  "categories": [
+    { "name": "⛓️ The Feed" },
+    { "name": "🧠 Lab" },
+    { "name": "🧪 Test Zone" },
+    { "name": "📂 Vault" },
+    { "name": "📢 Broadcast" }
+  ],
+  "channels": [
+    {
+      "name": "{emoji}-the-feed",
+      "type": "text",
+      "category": "⛓️ The Feed",
+      "topic": "Main stream. Thoughts, drops, noise, conversation.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-introduce-yourself",
+      "type": "text",
+      "category": "⛓️ The Feed",
+      "topic": "Say who you are, what you make, what you break.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-lab-talk",
+      "type": "text",
+      "category": "🧠 Lab",
+      "topic": "Ideas, concepts, code, visuals, half-finished thoughts.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-work-in-progress",
+      "type": "text",
+      "category": "🧠 Lab",
+      "topic": "Post WIPs, experiments, glitches, drafts.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-test-requests",
+      "type": "text",
+      "category": "🧪 Test Zone",
+      "topic": "Need eyes? Feedback? Stress tests?",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-bug-void",
+      "type": "text",
+      "category": "🧪 Test Zone",
+      "topic": "Broken stuff goes here. Describe the chaos.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-tutorial-dumps",
+      "type": "text",
+      "category": "📂 Vault",
+      "topic": "Tutorials, writeups, discoveries worth keeping.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-asset-cache",
+      "type": "text",
+      "category": "📂 Vault",
+      "topic": "Assets, scripts, sounds, textures, tools.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-broadcast",
+      "type": "text",
+      "category": "📢 Broadcast",
+      "topic": "Official drops, releases, statements from ᴚentBoy.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-daily-signal",
+      "type": "text",
+      "category": "📢 Broadcast",
+      "topic": "Daily info, events, vibes, automated posts.",
+      "nsfw": false
+    },
+    {
+      "name": "{emoji}-bot-interface",
+      "type": "text",
+      "category": "📂 Vault",
+      "topic": "Bot commands and automated interactions.",
+      "nsfw": false
+    }
+  ]
+}
+
     {"name": "Development"},
     {"name": "Testing"},
     {"name": "Resources"},
