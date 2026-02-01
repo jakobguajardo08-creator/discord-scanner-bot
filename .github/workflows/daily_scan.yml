@@ -2,7 +2,7 @@ name: LuCha Daily Run
 
 on:
   schedule:
-    # Runs daily at 09:10 UTC (03:10 America/Chicago during CST, 04:10 during CDT)
+    # Runs daily at 09:10 UTC (03:10 CST / 04:10 CDT)
     - cron: "10 9 * * *"
   workflow_dispatch: {}
 
@@ -32,47 +32,59 @@ jobs:
 
       - name: Run LuCha
         env:
+          # --- Required ---
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           GUILD_ID: ${{ secrets.GUILD_ID }}
 
-          # Safety switches: keep DRY by default unless you explicitly arm it in secrets/vars.
-          # Recommended: set LUCHA_ARMED as a repo secret or env var to "1" only when ready.
+          # --- Safety ---
           LUCHA_ARMED: ${{ secrets.LUCHA_ARMED }}
           DRY_RUN: ${{ secrets.DRY_RUN }}
 
-          # Optional toggles (set as repo variables or secrets if you want)
+          # --- Feature toggles ---
           ENABLE_RENAME: ${{ vars.ENABLE_RENAME }}
           ENABLE_MODERATION: ${{ vars.ENABLE_MODERATION }}
           ENABLE_NUKE_REMEDIATION: ${{ vars.ENABLE_NUKE_REMEDIATION }}
-          ENABLE_WOTD: ${{ vars.ENABLE_WOTD }}
 
+          ENABLE_DAILY_INFO: ${{ vars.ENABLE_DAILY_INFO }}   # ✅ renamed
+          ENABLE_YOUTUBE: ${{ vars.ENABLE_YOUTUBE }}         # 🆕 new
+
+          # --- YouTube ---
+          YT_CHANNEL_ID: ${{ secrets.YT_CHANNEL_ID }}         # 🆕 required
+          YT_POST_CHANNEL_NAME: ${{ vars.YT_POST_CHANNEL_NAME }}
+
+          # --- Channels ---
           INFO_CHANNEL_NAME: ${{ vars.INFO_CHANNEL_NAME }}
+
+          # --- Moderation ---
           MAX_MESSAGES: ${{ vars.MAX_MESSAGES }}
           TOXIC_THRESHOLD: ${{ vars.TOXIC_THRESHOLD }}
           NSFW_THRESHOLD: ${{ vars.NSFW_THRESHOLD }}
-
-          RENAME_MODE: ${{ vars.RENAME_MODE }}
-          MAX_RENAMES: ${{ vars.MAX_RENAMES }}
-          RENAME_EXCLUDE_REGEX: ${{ vars.RENAME_EXCLUDE_REGEX }}
-          RENAME_ALLOWLIST_REGEX: ${{ vars.RENAME_ALLOWLIST_REGEX }}
-          RENAME_INCLUDE_CATEGORIES: ${{ vars.RENAME_INCLUDE_CATEGORIES }}
 
           SCAN_ALLOWLIST_REGEX: ${{ vars.SCAN_ALLOWLIST_REGEX }}
           SCAN_EXCLUDE_REGEX: ${{ vars.SCAN_EXCLUDE_REGEX }}
           DELETE_WEBHOOK_LEAKS: ${{ vars.DELETE_WEBHOOK_LEAKS }}
           DELETE_CREDENTIAL_LEAKS: ${{ vars.DELETE_CREDENTIAL_LEAKS }}
 
+          # --- Rename controls ---
+          RENAME_MODE: ${{ vars.RENAME_MODE }}
+          MAX_RENAMES: ${{ vars.MAX_RENAMES }}
+          RENAME_EXCLUDE_REGEX: ${{ vars.RENAME_EXCLUDE_REGEX }}
+          RENAME_ALLOWLIST_REGEX: ${{ vars.RENAME_ALLOWLIST_REGEX }}
+          RENAME_INCLUDE_CATEGORIES: ${{ vars.RENAME_INCLUDE_CATEGORIES }}
+
+          # --- Nuke detection ---
           NUKE_DELETION_THRESHOLD: ${{ vars.NUKE_DELETION_THRESHOLD }}
           NUKE_NEW_CHANNEL_THRESHOLD: ${{ vars.NUKE_NEW_CHANNEL_THRESHOLD }}
 
-          # Optional: persist snapshot/report as artifacts by writing to workspace
+          # --- Files (persisted) ---
           BACKUP_FILE: guild_backup.json
           REPORT_FILE: mod_report.json
+          STATE_FILE: lucha_state.json   # 🆕 IMPORTANT
 
         run: |
           python -u lucha.py
 
-      - name: Upload report + snapshot
+      - name: Upload LuCha output
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -80,4 +92,5 @@ jobs:
           path: |
             mod_report.json
             guild_backup.json
+            lucha_state.json   # 🆕 REQUIRED
           if-no-files-found: warn
