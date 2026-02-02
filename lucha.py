@@ -23,7 +23,7 @@ Safety switches
 
 Feature toggles
   ENABLE_RENAME=0/1            (default 1)
-  ENABLE_MODERATION=0/1        (default 1)
+  ENABLE_MODERATION=0        (default 1)
   ENABLE_NUKE_REMEDIATION=0/1  (default 1)
   ENABLE_DAILY_INFO=0/1        (default 1)
   ENABLE_YOUTUBE=0/1           (default 1)
@@ -1034,8 +1034,8 @@ async def post_latest_youtube_if_new(guild: discord.Guild, state: dict):
 # Intents minimized: message_content only if moderation enabled.
 intents = discord.Intents.default()
 intents.guilds = True
-intents.messages = CFG.enable_moderation
-intents.message_content = CFG.enable_moderation
+intents.messages = True
+intents.message_content = False
 
 client = discord.Client(intents=intents)
 
