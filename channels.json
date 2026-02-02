@@ -1,0 +1,9 @@
+{
+  "channels": [
+    {"type": "category", "name": "ᴚentBoy"},
+    {"type": "text", "name": "announcements", "category": "ᴚentBoy", "topic": "Official drops + news"},
+    {"type": "text", "name": "daily-info", "category": "ᴚentBoy", "topic": "Daily ᴚentBoy fan posts"},
+    {"type": "text", "name": "chat", "category": "ᴚentBoy"},
+    {"type": "voice", "name": "listening-lounge", "category": "ᴚentBoy"}
+  ]
+}
