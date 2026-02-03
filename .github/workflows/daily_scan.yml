@@ -1,17 +1,17 @@
-name: LuCha Daily Channel Security Scan
+name: LuCha Daily Reconcile
 
 on:
   schedule:
-    # Runs once per day at 06:00 UTC
-    - cron: "0 6 * * *"
+    - cron: "0 6 * * *"   # daily at 06:00 UTC
   workflow_dispatch: {}
 
 jobs:
   lucha:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -19,27 +19,50 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
-          pip install --upgrade pip
+          python -m pip install --upgrade pip
           pip install discord.py aiohttp
 
-      # 🔑 CRITICAL STEP — prevents silent early exit
-      - name: Reset LuCha daily state
+      # ✅ Force the script to run (prevents "already ran today" early exit)
+      - name: Reset LuCha state (force run)
         run: |
-          rm -f lucha_state.json
+          rm -f lucha_state.json mod_report.json
+          echo "{}" > lucha_state.json
 
-      - name: Run LuCha security scan
+      # ✅ Sanity check env wiring (no secret leak)
+      - name: Sanity check secrets
+        env:
+          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
+          GUILD_ID: ${{ secrets.GUILD_ID }}
+        run: |
+          python - <<'PY'
+          import os, sys
+          tok = os.getenv("DISCORD_TOKEN","")
+          gid = os.getenv("GUILD_ID","")
+          if not tok:
+            print("❌ DISCORD_TOKEN missing")
+            sys.exit(2)
+          if not gid or not gid.isdigit():
+            print("❌ GUILD_ID missing or not numeric")
+            sys.exit(2)
+          print("✅ Secrets present. Token length:", len(tok), "Guild:", gid)
+          PY
+
+      # ✅ Run the bot for real
+      - name: Run LuCha (armed)
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           GUILD_ID: ${{ secrets.GUILD_ID }}
           LUCHA_ARMED: "1"
           DRY_RUN: "0"
         run: |
-          python lucha.py
+          # Unbuffered prints if your script prints anything
+          python -u lucha.py
 
-      # 🧾 Upload logs + reports for debugging
+      # Always upload output, even if LuCha crashes
       - name: Upload LuCha artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: lucha-output
