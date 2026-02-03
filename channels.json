@@ -1,9 +1,139 @@
 {
   "channels": [
-    {"type": "category", "name": "ᴚentBoy"},
-    {"type": "text", "name": "announcements", "category": "ᴚentBoy", "topic": "Official drops + news"},
-    {"type": "text", "name": "daily-info", "category": "ᴚentBoy", "topic": "Daily ᴚentBoy fan posts"},
-    {"type": "text", "name": "chat", "category": "ᴚentBoy"},
-    {"type": "voice", "name": "listening-lounge", "category": "ᴚentBoy"}
+    /* =========================
+       CORE / ONBOARDING
+       ========================= */
+    { "type": "category", "name": "Start Here" },
+
+    {
+      "type": "text",
+      "name": "rules",
+      "category": "Start Here"
+    },
+    {
+      "type": "text",
+      "name": "announcements",
+      "category": "Start Here"
+    },
+    {
+      "type": "text",
+      "name": "daily-info",
+      "category": "Start Here"
+    },
+
+    /* =========================
+       ARTIST HUB
+       ========================= */
+    { "type": "category", "name": "Artist Hub" },
+
+    {
+      "type": "text",
+      "name": "latest-uploads",
+      "category": "Artist Hub"
+    },
+    {
+      "type": "text",
+      "name": "music-discussion",
+      "category": "Artist Hub"
+    },
+    {
+      "type": "text",
+      "name": "lyrics-and-theories",
+      "category": "Artist Hub"
+    },
+    {
+      "type": "text",
+      "name": "fan-art",
+      "category": "Artist Hub"
+    },
+    {
+      "type": "text",
+      "name": "fan-edits",
+      "category": "Artist Hub"
+    },
+
+    /* =========================
+       COMMUNITY
+       ========================= */
+    { "type": "category", "name": "Community" },
+
+    {
+      "type": "text",
+      "name": "general-chat",
+      "category": "Community"
+    },
+    {
+      "type": "text",
+      "name": "introductions",
+      "category": "Community"
+    },
+    {
+      "type": "text",
+      "name": "off-topic",
+      "category": "Community"
+    },
+    {
+      "type": "text",
+      "name": "memes",
+      "category": "Community"
+    },
+
+    /* =========================
+       LISTENING & VOICE
+       ========================= */
+    { "type": "category", "name": "Listening Rooms" },
+
+    {
+      "type": "voice",
+      "name": "listening-room-1",
+      "category": "Listening Rooms"
+    },
+    {
+      "type": "voice",
+      "name": "listening-room-2",
+      "category": "Listening Rooms"
+    },
+    {
+      "type": "voice",
+      "name": "chill-vc",
+      "category": "Listening Rooms"
+    },
+
+    /* =========================
+       EVENTS & COLLABS
+       ========================= */
+    { "type": "category", "name": "Events & Collabs" },
+
+    {
+      "type": "text",
+      "name": "events",
+      "category": "Events & Collabs"
+    },
+    {
+      "type": "text",
+      "name": "listening-parties",
+      "category": "Events & Collabs"
+    },
+    {
+      "type": "text",
+      "name": "collab-ideas",
+      "category": "Events & Collabs"
+    },
+
+    /* =========================
+       SUPPORT / META
+       ========================= */
+    { "type": "category", "name": "Server Meta" },
+
+    {
+      "type": "text",
+      "name": "suggestions",
+      "category": "Server Meta"
+    },
+    {
+      "type": "text",
+      "name": "report-issues",
+      "category": "Server Meta"
+    }
   ]
 }
