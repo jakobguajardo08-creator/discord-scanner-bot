@@ -1,47 +1,24 @@
 {
   "channels": [
     /* =========================
-       START HERE
+       CORE / ONBOARDING
        ========================= */
     { "type": "category", "name": "Start Here" },
 
     {
       "type": "text",
       "name": "rules",
-      "category": "Start Here",
-      "permissions": {
-        "everyone": {
-          "send_messages": false,
-          "add_reactions": true
-        }
-      }
+      "category": "Start Here"
     },
     {
       "type": "text",
       "name": "announcements",
-      "category": "Start Here",
-      "permissions": {
-        "everyone": {
-          "send_messages": false
-        },
-        "roles": {
-          "Moderator": { "send_messages": true },
-          "Artist": { "send_messages": true }
-        }
-      }
+      "category": "Start Here"
     },
     {
       "type": "text",
       "name": "daily-info",
-      "category": "Start Here",
-      "permissions": {
-        "everyone": {
-          "send_messages": false
-        },
-        "roles": {
-          "Moderator": { "send_messages": true }
-        }
-      }
+      "category": "Start Here"
     },
 
     /* =========================
@@ -51,45 +28,28 @@
 
     {
       "type": "text",
-      "name": "yt-posts",
-      "category": "Artist Hub",
-      "permissions": {
-        "everyone": {
-          "send_messages": false,
-          "add_reactions": true
-        }
-      }
+      "name": "latest-uploads",
+      "category": "Artist Hub"
     },
     {
       "type": "text",
       "name": "music-discussion",
-      "category": "Artist Hub",
-      "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
-      }
+      "category": "Artist Hub"
     },
     {
       "type": "text",
       "name": "lyrics-and-theories",
-      "category": "Artist Hub",
-      "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
-      }
+      "category": "Artist Hub"
     },
     {
       "type": "text",
       "name": "fan-art",
-      "category": "Artist Hub",
-      "permissions": {
-        "everyone": {
-          "send_messages": true,
-          "add_reactions": true
-        }
-      }
+      "category": "Artist Hub"
+    },
+    {
+      "type": "text",
+      "name": "fan-edits",
+      "category": "Artist Hub"
     },
 
     /* =========================
@@ -100,101 +60,80 @@
     {
       "type": "text",
       "name": "general-chat",
-      "category": "Community",
-      "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
-      }
+      "category": "Community"
     },
     {
       "type": "text",
       "name": "introductions",
-      "category": "Community",
-      "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
-      }
+      "category": "Community"
+    },
+    {
+      "type": "text",
+      "name": "off-topic",
+      "category": "Community"
     },
     {
       "type": "text",
       "name": "memes",
-      "category": "Community",
-      "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
-      }
+      "category": "Community"
     },
 
     /* =========================
-       LISTENING ROOMS
+       LISTENING & VOICE
        ========================= */
     { "type": "category", "name": "Listening Rooms" },
 
     {
       "type": "voice",
       "name": "listening-room-1",
-      "category": "Listening Rooms",
-      "permissions": {
-        "everyone": {
-          "connect": true,
-          "speak": true
-        }
-      }
+      "category": "Listening Rooms"
     },
     {
       "type": "voice",
       "name": "listening-room-2",
-      "category": "Listening Rooms",
-      "permissions": {
-        "everyone": {
-          "connect": true,
-          "speak": true
-        }
-      }
+      "category": "Listening Rooms"
     },
     {
       "type": "voice",
-      "name": "stage-listening",
-      "category": "Listening Rooms",
-      "permissions": {
-        "everyone": {
-          "connect": true,
-          "speak": false
-        },
-        "roles": {
-          "Artist": { "speak": true },
-          "Moderator": { "speak": true }
-        }
-      }
+      "name": "chill-vc",
+      "category": "Listening Rooms"
     },
 
     /* =========================
-       SERVER META
+       EVENTS & COLLABS
+       ========================= */
+    { "type": "category", "name": "Events & Collabs" },
+
+    {
+      "type": "text",
+      "name": "events",
+      "category": "Events & Collabs"
+    },
+    {
+      "type": "text",
+      "name": "listening-parties",
+      "category": "Events & Collabs"
+    },
+    {
+      "type": "text",
+      "name": "collab-ideas",
+      "category": "Events & Collabs"
+    },
+
+    /* =========================
+       SUPPORT / META
        ========================= */
     { "type": "category", "name": "Server Meta" },
 
     {
       "type": "text",
       "name": "suggestions",
-      "category": "Server Meta",
-      "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
-      }
+      "category": "Server Meta"
     },
     {
       "type": "text",
       "name": "report-issues",
-      "category": "Server Meta",
-      "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
-      }
+      "category": "Server Meta"
     }
   ]
 }
