@@ -1,17 +1,19 @@
-name: LuCha Daily Reconcile
+name: LuCha Daily Run
 
 on:
   schedule:
-    - cron: "0 6 * * *"   # daily at 06:00 UTC
-  workflow_dispatch: {}
+    # Runs once per day at 12:00 UTC
+    - cron: "0 12 * * *"
+
+  # Allows manual run from GitHub UI (for testing)
+  workflow_dispatch:
 
 jobs:
-  lucha:
+  run-lucha:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -19,53 +21,19 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install deps
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install discord.py aiohttp
 
-      # ✅ Force the script to run (prevents "already ran today" early exit)
-      - name: Reset LuCha state (force run)
-        run: |
-          rm -f lucha_state.json mod_report.json
-          echo "{}" > lucha_state.json
-
-      # ✅ Sanity check env wiring (no secret leak)
-      - name: Sanity check secrets
+      - name: Run LuCha
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           GUILD_ID: ${{ secrets.GUILD_ID }}
-        run: |
-          python - <<'PY'
-          import os, sys
-          tok = os.getenv("DISCORD_TOKEN","")
-          gid = os.getenv("GUILD_ID","")
-          if not tok:
-            print("❌ DISCORD_TOKEN missing")
-            sys.exit(2)
-          if not gid or not gid.isdigit():
-            print("❌ GUILD_ID missing or not numeric")
-            sys.exit(2)
-          print("✅ Secrets present. Token length:", len(tok), "Guild:", gid)
-          PY
+          YT_CHANNEL_ID: ${{ secrets.YT_CHANNEL_ID }}
 
-      # ✅ Run the bot for real
-      - name: Run LuCha (armed)
-        env:
-          DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
-          GUILD_ID: ${{ secrets.GUILD_ID }}
-          LUCHA_ARMED: "1"
-          DRY_RUN: "0"
+          LOCALAI_BASE_URL: ${{ secrets.LOCALAI_BASE_URL }}
+          LOCALAI_API_KEY: ${{ secrets.LOCALAI_API_KEY }}
+          LOCALAI_MODEL: ${{ secrets.LOCALAI_MODEL }}
         run: |
-          # Unbuffered prints if your script prints anything
-          python -u lucha.py
-
-      # Always upload output, even if LuCha crashes
-      - name: Upload LuCha artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lucha-output
-          path: |
-            mod_report.json
-            lucha_state.json
+          python lucha.py
