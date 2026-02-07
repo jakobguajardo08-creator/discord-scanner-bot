@@ -38,7 +38,7 @@ FORCE_RUN = os.getenv("FORCE_RUN", "0") == "1"
 DRY_RUN = os.getenv("DRY_RUN", "0") == "1" or not LUCHA_ARMED
 
 YT_POST_CHANNEL = "yt-posts"
-YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
+YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id=UCtEF5V5tssiKldIAIkrjb0w"
 
 if not DISCORD_TOKEN or not GUILD_ID_RAW.isdigit():
     print("❌ Missing DISCORD_TOKEN or invalid GUILD_ID")
