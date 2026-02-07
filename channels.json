@@ -1,11 +1,13 @@
 {
   "channels": [
-    { "type": "category", "name": "News & Updates" },
-
+    {
+      "type": "category",
+      "name": "official-messages"
+    },
     {
       "type": "text",
-      "name": "announcements",
-      "category": "News & Updates",
+      "name": "statements-for-all-individuals",
+      "category": "official-messages",
       "permissions": {
         "everyone": { "send_messages": false },
         "roles": {
@@ -16,8 +18,8 @@
     },
     {
       "type": "text",
-      "name": "yt-posts",
-      "category": "News & Updates",
+      "name": "externally-hosted-moving-images",
+      "category": "official-messages",
       "permissions": {
         "everyone": {
           "send_messages": false,
@@ -25,97 +27,57 @@
         }
       }
     },
-    {
-      "type": "text",
-      "name": "release-news",
-      "category": "News & Updates",
-      "permissions": {
-        "everyone": { "send_messages": false },
-        "roles": {
-          "Artist": { "send_messages": true }
-        }
-      }
-    },
-
-    { "type": "category", "name": "The Project" },
 
     {
-      "type": "text",
-      "name": "about-the-project",
-      "category": "The Project",
-      "permissions": {
-        "everyone": { "send_messages": false }
-      }
+      "type": "category",
+      "name": "audio-and-related-concepts"
     },
     {
       "type": "text",
-      "name": "music-discussion",
-      "category": "The Project",
+      "name": "evaluation-of-recent-sounds",
+      "category": "audio-and-related-concepts",
       "permissions": {
         "everyone": { "send_messages": true }
       }
     },
     {
       "type": "text",
-      "name": "lyrics-and-theories",
-      "category": "The Project",
-      "permissions": {
-        "everyone": { "send_messages": true }
-      }
-    },
-    {
-      "type": "text",
-      "name": "feedback-and-ideas",
-      "category": "The Project",
+      "name": "interpretation-and-assumptions",
+      "category": "audio-and-related-concepts",
       "permissions": {
         "everyone": { "send_messages": true }
       }
     },
 
-    { "type": "category", "name": "Community" },
-
+    {
+      "type": "category",
+      "name": "human-interaction-zone"
+    },
     {
       "type": "text",
-      "name": "general-chat",
-      "category": "Community",
+      "name": "unstructured-communication",
+      "category": "human-interaction-zone",
       "permissions": {
         "everyone": { "send_messages": true }
       }
     },
     {
       "type": "text",
-      "name": "introductions",
-      "category": "Community",
-      "permissions": {
-        "everyone": { "send_messages": true }
-      }
-    },
-    {
-      "type": "text",
-      "name": "fan-art",
-      "category": "Community",
-      "permissions": {
-        "everyone": {
-          "send_messages": true,
-          "add_reactions": true
-        }
-      }
-    },
-    {
-      "type": "text",
-      "name": "memes",
-      "category": "Community",
+      "name": "initial-self-identification",
+      "category": "human-interaction-zone",
       "permissions": {
         "everyone": { "send_messages": true }
       }
     },
 
-    { "type": "category", "name": "Listening Rooms" },
-
+    {
+      "type": "category",
+      "name": "shared-auditory-experience"
+    },
     {
       "type": "voice",
-      "name": "listening-room",
-      "category": "Listening Rooms",
+      "name": "simultaneous-listening-instance",
+      "category": "shared-auditory-experience",
       "permissions": {
         "everyone": {
           "connect": true,
@@ -125,26 +87,24 @@
     },
     {
       "type": "voice",
-      "name": "stage-listening",
-      "category": "Listening Rooms",
+      "name": "additional-simultaneous-listening-instance",
+      "category": "shared-auditory-experience",
       "permissions": {
         "everyone": {
           "connect": true,
-          "speak": false
-        },
-        "roles": {
-          "Artist": { "speak": true },
-          "Moderator": { "speak": true }
+          "speak": true
         }
       }
     },
 
-    { "type": "category", "name": "Server Info" },
-
+    {
+      "type": "category",
+      "name": "system-maintenance-and-behavior"
+    },
     {
       "type": "text",
-      "name": "rules",
-      "category": "Server Info",
+      "name": "expected-conduct-parameters",
+      "category": "system-maintenance-and-behavior",
       "permissions": {
         "everyone": {
           "send_messages": false,
@@ -154,16 +114,8 @@
     },
     {
       "type": "text",
-      "name": "suggestions",
-      "category": "Server Info",
-      "permissions": {
-        "everyone": { "send_messages": true }
-      }
-    },
-    {
-      "type": "text",
-      "name": "report-issues",
-      "category": "Server Info",
+      "name": "user-generated-feedback-material",
+      "category": "system-maintenance-and-behavior",
       "permissions": {
         "everyone": { "send_messages": true }
       }
