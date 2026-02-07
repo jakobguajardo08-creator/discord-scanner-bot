@@ -1,192 +1,124 @@
-#!/usr/bin/env python3
-import os
-import sys
-import json
-import asyncio
-import aiohttp
-import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, date
-from typing import Optional, Dict, List
-
-import discord
-from discord.utils import get
-
-# ===================== CONFIG =====================
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
-GUILD_ID = int(os.getenv("GUILD_ID", "0"))
-
-YT_CHANNEL_ID = os.getenv("YT_CHANNEL_ID", "").strip()
-
-LOCALAI_BASE_URL = os.getenv("LOCALAI_BASE_URL", "").rstrip("/")
-LOCALAI_API_KEY = os.getenv("LOCALAI_API_KEY", "local")
-LOCALAI_MODEL = os.getenv("LOCALAI_MODEL", "mistral")
-
-STATE_FILE = "lucha_state.json"
-
-SUMMARY_SOURCE_CHANNEL = "unstructured-communication"
-SUMMARY_TARGET_CHANNEL = "statements-for-all-individuals"
-YT_TARGET_CHANNEL = "externally-hosted-moving-images"
-
-YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
-
-# ===================== VALIDATION =====================
-if not DISCORD_TOKEN or not GUILD_ID:
-    print("Missing DISCORD_TOKEN or GUILD_ID")
-    sys.exit(1)
-
-# ===================== UTILS =====================
-def utc_now() -> str:
-    return datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
-
-def today_key() -> str:
-    return f"ran:{date.today().isoformat()}"
-
-def load_state() -> dict:
-    try:
-        with open(STATE_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_state(state: dict):
-    with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
-
-# ===================== LOCALAI =====================
-async def summarize_localai(text: str) -> Optional[str]:
-    if not LOCALAI_BASE_URL or not text.strip():
-        return None
-
-    payload = {
-        "model": LOCALAI_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Summarize the following content as observed activity. "
-                    "Use a neutral, formal, slightly uncanny tone. "
-                    "Do not include jokes, emojis, or opinions."
-                )
-            },
-            {"role": "user", "content": text}
-        ],
-        "temperature": 0.4
-    }
-
-    headers = {
-        "Authorization": f"Bearer {LOCALAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                f"{LOCALAI_BASE_URL}/chat/completions",
-                json=payload,
-                headers=headers,
-                timeout=aiohttp.ClientTimeout(total=30)
-            ) as resp:
-                if resp.status != 200:
-                    return None
-                data = await resp.json()
-                return data["choices"][0]["message"]["content"]
-    except Exception:
-        return None
-
-# ===================== YOUTUBE =====================
-def parse_rss(data: bytes) -> Optional[Dict[str, str]]:
-    try:
-        root = ET.fromstring(data)
-        ns = {
-            "a": "http://www.w3.org/2005/Atom",
-            "yt": "http://www.youtube.com/xml/schemas/2015"
+{
+  "channels": [
+    {
+      "type": "category",
+      "name": "official-communications"
+    },
+    {
+      "type": "text",
+      "name": "statements-for-all-individuals",
+      "category": "official-communications",
+      "permissions": {
+        "everyone": { "send_messages": false },
+        "roles": {
+          "Artist": { "send_messages": true },
+          "Moderator": { "send_messages": true }
         }
-        entry = root.find("a:entry", ns)
-        if entry is None:
-            return None
-        return {
-            "video_id": entry.find("yt:videoId", ns).text,
-            "title": entry.find("a:title", ns).text,
-            "url": entry.find("a:link", ns).attrib["href"],
-            "published": entry.find("a:published", ns).text
+      }
+    },
+    {
+      "type": "text",
+      "name": "externally-hosted-moving-images",
+      "category": "official-communications",
+      "permissions": {
+        "everyone": {
+          "send_messages": false,
+          "add_reactions": true
         }
-    except Exception:
-        return None
+      }
+    },
 
-async def fetch_latest_video() -> Optional[Dict[str, str]]:
-    if not YT_CHANNEL_ID:
-        return None
-    async with aiohttp.ClientSession() as session:
-        async with session.get(YOUTUBE_RSS.format(YT_CHANNEL_ID)) as resp:
-            if resp.status != 200:
-                return None
-            return parse_rss(await resp.read())
+    {
+      "type": "category",
+      "name": "audio-and-associated-matters"
+    },
+    {
+      "type": "text",
+      "name": "evaluation-of-recent-sounds",
+      "category": "audio-and-associated-matters",
+      "permissions": {
+        "everyone": { "send_messages": true }
+      }
+    },
+    {
+      "type": "text",
+      "name": "speculative-interpretation",
+      "category": "audio-and-associated-matters",
+      "permissions": {
+        "everyone": { "send_messages": true }
+      }
+    },
 
-# ===================== DISCORD =====================
-intents = discord.Intents.default()
-intents.guilds = True
-intents.messages = True
-intents.message_content = True
+    {
+      "type": "category",
+      "name": "participant-interaction"
+    },
+    {
+      "type": "text",
+      "name": "unstructured-communication",
+      "category": "participant-interaction",
+      "permissions": {
+        "everyone": { "send_messages": true }
+      }
+    },
+    {
+      "type": "text",
+      "name": "initial-self-reporting",
+      "category": "participant-interaction",
+      "permissions": {
+        "everyone": { "send_messages": true }
+      }
+    },
 
-client = discord.Client(intents=intents)
+    {
+      "type": "category",
+      "name": "shared-auditory-environments"
+    },
+    {
+      "type": "voice",
+      "name": "simultaneous-listening-instance",
+      "category": "shared-auditory-environments",
+      "permissions": {
+        "everyone": {
+          "connect": true,
+          "speak": true
+        }
+      }
+    },
+    {
+      "type": "voice",
+      "name": "secondary-simultaneous-listening-instance",
+      "category": "shared-auditory-environments",
+      "permissions": {
+        "everyone": {
+          "connect": true,
+          "speak": true
+        }
+      }
+    },
 
-@client.event
-async def on_ready():
-    print("LuCha online")
-
-    state = load_state()
-
-    # ---- run once per day ----
-    if state.get(today_key()):
-        print("Already ran today, exiting")
-        await client.close()
-        return
-
-    guild = client.get_guild(GUILD_ID)
-    if not guild:
-        print("Guild not found")
-        await client.close()
-        return
-
-    # ---- locate channels ----
-    source = get(guild.text_channels, name=SUMMARY_SOURCE_CHANNEL)
-    target = get(guild.text_channels, name=SUMMARY_TARGET_CHANNEL)
-    yt_channel = get(guild.text_channels, name=YT_TARGET_CHANNEL)
-
-    # ---- summarize conversation ----
-    if source and target:
-        messages: List[str] = []
-        last_id = state.get("summary_last_message_id")
-
-        async for msg in source.history(limit=100, oldest_first=True):
-            if last_id and msg.id <= last_id:
-                continue
-            if not msg.author.bot and msg.content:
-                messages.append(msg.content)
-
-        if messages:
-            summary = await summarize_localai("\n".join(messages))
-            if summary:
-                await target.send(
-                    f"Observed recent activity:\n\n{summary}"
-                )
-                state["summary_last_message_id"] = msg.id
-
-    # ---- youtube posting ----
-    yt = await fetch_latest_video()
-    if yt:
-        if yt["video_id"] != state.get("yt_last_video_id"):
-            if yt_channel:
-                await yt_channel.send(
-                    f"Externally hosted moving image detected:\n"
-                    f"{yt['title']}\n{yt['url']}"
-                )
-                state["yt_last_video_id"] = yt["video_id"]
-
-    # ---- finalize ----
-    state[today_key()] = True
-    save_state(state)
-    print("LuCha finished run")
-    await client.close()
-
-client.run(DISCORD_TOKEN)
+    {
+      "type": "category",
+      "name": "system-maintenance"
+    },
+    {
+      "type": "text",
+      "name": "expected-behavioral-parameters",
+      "category": "system-maintenance",
+      "permissions": {
+        "everyone": {
+          "send_messages": false,
+          "add_reactions": true
+        }
+      }
+    },
+    {
+      "type": "text",
+      "name": "user-generated-feedback-material",
+      "category": "system-maintenance",
+      "permissions": {
+        "everyone": { "send_messages": true }
+      }
+    }
+  ]
+}
