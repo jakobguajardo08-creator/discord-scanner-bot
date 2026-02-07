@@ -1,14 +1,26 @@
 {
   "channels": [
     /* =========================
-       START HERE
+       START / NEWS
        ========================= */
-    { "type": "category", "name": "Start Here" },
+    { "type": "category", "name": "News & Updates" },
 
     {
       "type": "text",
-      "name": "rules",
-      "category": "Start Here",
+      "name": "announcements",
+      "category": "News & Updates",
+      "permissions": {
+        "everyone": { "send_messages": false },
+        "roles": {
+          "Artist": { "send_messages": true },
+          "Moderator": { "send_messages": true }
+        }
+      }
+    },
+    {
+      "type": "text",
+      "name": "yt-posts",
+      "category": "News & Updates",
       "permissions": {
         "everyone": {
           "send_messages": false,
@@ -18,77 +30,51 @@
     },
     {
       "type": "text",
-      "name": "announcements",
-      "category": "Start Here",
+      "name": "release-news",
+      "category": "News & Updates",
       "permissions": {
-        "everyone": {
-          "send_messages": false
-        },
+        "everyone": { "send_messages": false },
         "roles": {
-          "Moderator": { "send_messages": true },
           "Artist": { "send_messages": true }
-        }
-      }
-    },
-    {
-      "type": "text",
-      "name": "daily-info",
-      "category": "Start Here",
-      "permissions": {
-        "everyone": {
-          "send_messages": false
-        },
-        "roles": {
-          "Moderator": { "send_messages": true }
         }
       }
     },
 
     /* =========================
-       ARTIST HUB
+       MUSIC PROJECT
        ========================= */
-    { "type": "category", "name": "Artist Hub" },
+    { "type": "category", "name": "The Project" },
 
     {
       "type": "text",
-      "name": "yt-posts",
-      "category": "Artist Hub",
+      "name": "about-the-project",
+      "category": "The Project",
       "permissions": {
-        "everyone": {
-          "send_messages": false,
-          "add_reactions": true
-        }
+        "everyone": { "send_messages": false }
       }
     },
     {
       "type": "text",
       "name": "music-discussion",
-      "category": "Artist Hub",
+      "category": "The Project",
       "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
+        "everyone": { "send_messages": true }
       }
     },
     {
       "type": "text",
       "name": "lyrics-and-theories",
-      "category": "Artist Hub",
+      "category": "The Project",
       "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
+        "everyone": { "send_messages": true }
       }
     },
     {
       "type": "text",
-      "name": "fan-art",
-      "category": "Artist Hub",
+      "name": "feedback-and-ideas",
+      "category": "The Project",
       "permissions": {
-        "everyone": {
-          "send_messages": true,
-          "add_reactions": true
-        }
+        "everyone": { "send_messages": true }
       }
     },
 
@@ -102,9 +88,7 @@
       "name": "general-chat",
       "category": "Community",
       "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
+        "everyone": { "send_messages": true }
       }
     },
     {
@@ -112,8 +96,17 @@
       "name": "introductions",
       "category": "Community",
       "permissions": {
+        "everyone": { "send_messages": true }
+      }
+    },
+    {
+      "type": "text",
+      "name": "fan-art",
+      "category": "Community",
+      "permissions": {
         "everyone": {
-          "send_messages": true
+          "send_messages": true,
+          "add_reactions": true
         }
       }
     },
@@ -122,31 +115,18 @@
       "name": "memes",
       "category": "Community",
       "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
+        "everyone": { "send_messages": true }
       }
     },
 
     /* =========================
-       LISTENING ROOMS
+       VOICE / LISTENING
        ========================= */
     { "type": "category", "name": "Listening Rooms" },
 
     {
       "type": "voice",
-      "name": "listening-room-1",
-      "category": "Listening Rooms",
-      "permissions": {
-        "everyone": {
-          "connect": true,
-          "speak": true
-        }
-      }
-    },
-    {
-      "type": "voice",
-      "name": "listening-room-2",
+      "name": "listening-room",
       "category": "Listening Rooms",
       "permissions": {
         "everyone": {
@@ -172,28 +152,35 @@
     },
 
     /* =========================
-       SERVER META
+       META / SUPPORT
        ========================= */
-    { "type": "category", "name": "Server Meta" },
+    { "type": "category", "name": "Server Info" },
 
     {
       "type": "text",
-      "name": "suggestions",
-      "category": "Server Meta",
+      "name": "rules",
+      "category": "Server Info",
       "permissions": {
         "everyone": {
-          "send_messages": true
+          "send_messages": false,
+          "add_reactions": true
         }
       }
     },
     {
       "type": "text",
-      "name": "report-issues",
-      "category": "Server Meta",
+      "name": "suggestions",
+      "category": "Server Info",
       "permissions": {
-        "everyone": {
-          "send_messages": true
-        }
+        "everyone": { "send_messages": true }
+      }
+    },
+    {
+      "type": "text",
+      "name": "report-issues",
+      "category": "Server Info",
+      "permissions": {
+        "everyone": { "send_messages": true }
       }
     }
   ]
