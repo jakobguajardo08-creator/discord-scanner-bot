@@ -27,8 +27,8 @@ CHANNELS_FILE = "channels.json"
 STATE_FILE = "lucha_state.json"
 REPORT_FILE = "mod_report.json"
 
-LUCHA_ARMED = os.getenv("LUCHA_ARMED", "0") == "1"
-DRY_RUN = os.getenv("DRY_RUN", "0") == "1" or not LUCHA_ARMED
+LUCHA_ARMED = "1"
+DRY_RUN = "1"
 
 if not DISCORD_TOKEN or not GUILD_ID:
     print("Missing DISCORD_TOKEN or GUILD_ID")
