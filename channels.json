@@ -1,8 +1,5 @@
 {
   "channels": [
-    /* =========================
-       START / NEWS
-       ========================= */
     { "type": "category", "name": "News & Updates" },
 
     {
@@ -40,9 +37,6 @@
       }
     },
 
-    /* =========================
-       MUSIC PROJECT
-       ========================= */
     { "type": "category", "name": "The Project" },
 
     {
@@ -78,9 +72,6 @@
       }
     },
 
-    /* =========================
-       COMMUNITY
-       ========================= */
     { "type": "category", "name": "Community" },
 
     {
@@ -119,9 +110,6 @@
       }
     },
 
-    /* =========================
-       VOICE / LISTENING
-       ========================= */
     { "type": "category", "name": "Listening Rooms" },
 
     {
@@ -151,9 +139,6 @@
       }
     },
 
-    /* =========================
-       META / SUPPORT
-       ========================= */
     { "type": "category", "name": "Server Info" },
 
     {
