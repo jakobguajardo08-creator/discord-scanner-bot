@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-LuCha — Daily Channel Reconciliation Bot
+LuCha — SAFE Daily Channel Reconciler
 
-• Runs once per day
-• Restores missing categories/channels from channels.json
-• Applies permissions from JSON
-• Deletes channels NOT in channels.json
-• Exits cleanly (ideal for cron / GitHub Actions)
+ABSOLUTE SAFETY GUARANTEES:
+• Will NOT run if channels.json is missing or empty
+• Will NOT delete unless creation succeeds
+• Will NOT touch Discord system channels
+• Will run once per day unless FORCE_RUN=1
 """
 
 import os
@@ -27,11 +27,12 @@ CHANNELS_FILE = "channels.json"
 STATE_FILE = "lucha_state.json"
 REPORT_FILE = "mod_report.json"
 
-LUCHA_ARMED = "1"
-DRY_RUN = "1"
+LUCHA_ARMED = os.getenv("LUCHA_ARMED", "0") == "1"
+FORCE_RUN = os.getenv("FORCE_RUN", "0") == "1"
+DRY_RUN = os.getenv("DRY_RUN", "0") == "1" or not LUCHA_ARMED
 
 if not DISCORD_TOKEN or not GUILD_ID:
-    print("Missing DISCORD_TOKEN or GUILD_ID")
+    print("❌ Missing DISCORD_TOKEN or GUILD_ID")
     sys.exit(1)
 
 # ================= HELPERS =================
@@ -73,24 +74,24 @@ PERM_MAP = {
     "speak": "speak",
 }
 
-def build_overwrites(guild, spec):
+def build_overwrites(guild, perm_spec):
     overwrites = {}
-
     everyone = guild.default_role
-    if "everyone" in spec:
-        perms = discord.PermissionOverwrite()
-        for k, v in spec["everyone"].items():
-            setattr(perms, PERM_MAP[k], v)
-        overwrites[everyone] = perms
 
-    for role_name, rules in spec.get("roles", {}).items():
+    if "everyone" in perm_spec:
+        p = discord.PermissionOverwrite()
+        for k, v in perm_spec["everyone"].items():
+            setattr(p, PERM_MAP[k], v)
+        overwrites[everyone] = p
+
+    for role_name, rules in perm_spec.get("roles", {}).items():
         role = get(guild.roles, name=role_name)
         if not role:
             continue
-        perms = discord.PermissionOverwrite()
+        p = discord.PermissionOverwrite()
         for k, v in rules.items():
-            setattr(perms, PERM_MAP[k], v)
-        overwrites[role] = perms
+            setattr(p, PERM_MAP[k], v)
+        overwrites[role] = p
 
     return overwrites
 
@@ -99,9 +100,22 @@ def build_overwrites(guild, spec):
 async def on_ready():
     REPORT["timestamp"] = datetime.utcnow().replace(tzinfo=timezone.utc).isoformat()
 
+    # ---- DAILY LOCK ----
     state = load_json(STATE_FILE)
-    if state.get(today_key()):
+    if state.get(today_key()) and not FORCE_RUN:
         REPORT["actions"].append("exit_already_ran_today")
+        save_json(REPORT_FILE, REPORT)
+        await client.close()
+        return
+
+    # ---- LOAD & VALIDATE JSON ----
+    spec_data = load_json(CHANNELS_FILE)
+    spec = spec_data.get("channels")
+
+    if not isinstance(spec, list) or len(spec) == 0:
+        REPORT["errors"].append(
+            f"ABORTED: {CHANNELS_FILE} missing or empty"
+        )
         save_json(REPORT_FILE, REPORT)
         await client.close()
         return
@@ -120,9 +134,7 @@ async def on_ready():
         await client.close()
         return
 
-    spec = load_json(CHANNELS_FILE).get("channels", [])
-
-    # ---------------- SYSTEM CHANNEL SAFETY ----------------
+    # ---- SYSTEM CHANNEL SAFETY ----
     system_ids = set()
     for attr in (
         "system_channel",
@@ -134,8 +146,10 @@ async def on_ready():
         if ch:
             system_ids.add(ch.id)
 
-    # ---------------- STEP 1: CREATE CATEGORIES ----------------
+    # ---- STEP 1: CREATE CATEGORIES ----
     category_map = {}
+    creation_failed = False
+
     for c in spec:
         if c["type"] != "category":
             continue
@@ -155,15 +169,15 @@ async def on_ready():
             REPORT["actions"].append(f"create_category:{c['name']}")
             await asyncio.sleep(1.2)
         except Exception as e:
+            creation_failed = True
             REPORT["errors"].append(f"category_create_error:{c['name']}:{e}")
 
-    # ---------------- STEP 2: CREATE CHANNELS ----------------
+    # ---- STEP 2: CREATE CHANNELS ----
     for c in spec:
         if c["type"] == "category":
             continue
 
-        exists = any(ch.name.lower() == c["name"].lower() for ch in guild.channels)
-        if exists:
+        if any(ch.name.lower() == c["name"].lower() for ch in guild.channels):
             continue
 
         parent = category_map.get(c.get("category"))
@@ -186,13 +200,18 @@ async def on_ready():
             REPORT["actions"].append(f"create_{c['type']}:{c['name']}")
             await asyncio.sleep(1.2)
         except Exception as e:
+            creation_failed = True
             REPORT["errors"].append(f"channel_create_error:{c['name']}:{e}")
 
-    # ---------------- STEP 3: DELETE FOREIGN CHANNELS ----------------
-    allowed = {
-        f"{c['type']}:{c['name'].lower()}"
-        for c in spec
-    }
+    # ---- SAFETY ABORT IF CREATION FAILED ----
+    if creation_failed:
+        REPORT["errors"].append("ABORTED: creation failures detected, no deletions performed")
+        save_json(REPORT_FILE, REPORT)
+        await client.close()
+        return
+
+    # ---- STEP 3: DELETE FOREIGN CHANNELS ----
+    allowed = {f"{c['type']}:{c['name'].lower()}" for c in spec}
 
     for ch in list(guild.channels):
         if ch.id in system_ids:
@@ -215,13 +234,13 @@ async def on_ready():
             continue
 
         try:
-            await ch.delete(reason="LuCha daily reconciliation")
+            await ch.delete(reason="LuCha safe reconciliation")
             REPORT["actions"].append(f"delete:{ch.name}")
             await asyncio.sleep(1.2)
         except Exception as e:
             REPORT["errors"].append(f"delete_error:{ch.name}:{e}")
 
-    # ---------------- FINALIZE ----------------
+    # ---- FINALIZE ----
     state[today_key()] = True
     save_json(STATE_FILE, state)
     save_json(REPORT_FILE, REPORT)
