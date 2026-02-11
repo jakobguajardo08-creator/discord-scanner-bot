@@ -1,11 +1,3 @@
-# LuCha (Discord Scanner + Word of the Day)
-# Core runtime
-discord.py==2.4.0
-aiohttp==3.10.10
-
-# Quality-of-life / reliability
-python-dotenv==1.0.1
-tenacity==9.0.0
-
-# Optional: nice structured logs (recommended)
-python-json-logger==2.0.7
+discord.py
+aiohttp
+beautifulsoup4
