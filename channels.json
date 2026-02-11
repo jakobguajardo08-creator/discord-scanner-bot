@@ -6,18 +6,6 @@
     },
     {
       "type": "text",
-      "name": "statements-for-all-individuals",
-      "category": "official-communications",
-      "permissions": {
-        "everyone": { "send_messages": false },
-        "roles": {
-          "Artist": { "send_messages": true },
-          "Moderator": { "send_messages": true }
-        }
-      }
-    },
-    {
-      "type": "text",
       "name": "externally-hosted-moving-images",
       "category": "official-communications",
       "permissions": {
@@ -27,97 +15,28 @@
         }
       }
     },
-
-    {
-      "type": "category",
-      "name": "audio-and-associated-matters"
-    },
     {
       "type": "text",
-      "name": "evaluation-of-recent-sounds",
-      "category": "audio-and-associated-matters",
+      "name": "commercial-goods",
+      "category": "official-communications",
       "permissions": {
-        "everyone": { "send_messages": true }
+        "everyone": {
+          "send_messages": false
+        }
       }
     },
     {
-      "type": "text",
-      "name": "speculative-interpretation",
-      "category": "audio-and-associated-matters",
-      "permissions": {
-        "everyone": { "send_messages": true }
-      }
-    },
-
-    {
       "type": "category",
-      "name": "participant-interaction"
+      "name": "general-interaction"
     },
     {
       "type": "text",
       "name": "unstructured-communication",
-      "category": "participant-interaction",
-      "permissions": {
-        "everyone": { "send_messages": true }
-      }
-    },
-    {
-      "type": "text",
-      "name": "initial-self-reporting",
-      "category": "participant-interaction",
-      "permissions": {
-        "everyone": { "send_messages": true }
-      }
-    },
-
-    {
-      "type": "category",
-      "name": "shared-auditory-environments"
-    },
-    {
-      "type": "voice",
-      "name": "simultaneous-listening-instance",
-      "category": "shared-auditory-environments",
+      "category": "general-interaction",
       "permissions": {
         "everyone": {
-          "connect": true,
-          "speak": true
+          "send_messages": true
         }
-      }
-    },
-    {
-      "type": "voice",
-      "name": "secondary-simultaneous-listening-instance",
-      "category": "shared-auditory-environments",
-      "permissions": {
-        "everyone": {
-          "connect": true,
-          "speak": true
-        }
-      }
-    },
-
-    {
-      "type": "category",
-      "name": "system-maintenance"
-    },
-    {
-      "type": "text",
-      "name": "expected-behavioral-parameters",
-      "category": "system-maintenance",
-      "permissions": {
-        "everyone": {
-          "send_messages": false,
-          "add_reactions": true
-        }
-      }
-    },
-    {
-      "type": "text",
-      "name": "user-generated-feedback-material",
-      "category": "system-maintenance",
-      "permissions": {
-        "everyone": { "send_messages": true }
       }
     }
   ]
