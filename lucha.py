@@ -4,123 +4,101 @@ import json
 import asyncio
 import aiohttp
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone, date
+from datetime import date
 from typing import Optional, Dict, List
-
+from bs4 import BeautifulSoup
 import discord
 from discord.utils import get
 
-# ===================== CONFIG =====================
+# ================= CONFIG =================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 
 YT_CHANNEL_ID = os.getenv("YT_CHANNEL_ID", "").strip()
-
-LOCALAI_BASE_URL = os.getenv("LOCALAI_BASE_URL", "").rstrip("/")
-LOCALAI_API_KEY = os.getenv("LOCALAI_API_KEY", "local")
-LOCALAI_MODEL = os.getenv("LOCALAI_MODEL", "mistral")
+TEEPUBLIC_STORE_URL = os.getenv("TEEPUBLIC_STORE_URL", "").strip()
 
 STATE_FILE = "lucha_state.json"
 
-SUMMARY_SOURCE_CHANNEL = "unstructured-communication"
-SUMMARY_TARGET_CHANNEL = "statements-for-all-individuals"
 YT_TARGET_CHANNEL = "externally-hosted-moving-images"
+TEEPUBLIC_CHANNEL = "commercial-goods"
 
 YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
 
-# ===================== SAFETY =====================
 if not DISCORD_TOKEN or not GUILD_ID:
     raise SystemExit("Missing DISCORD_TOKEN or GUILD_ID")
 
-# ===================== UTILS =====================
-def utc_today_key() -> str:
+# ================= STATE =================
+def today_key():
     return f"daily:{date.today().isoformat()}"
 
-def load_state() -> dict:
+def load_state():
     try:
         with open(STATE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception:
+    except:
         return {}
 
-def save_state(state: dict):
+def save_state(s):
     with open(STATE_FILE, "w", encoding="utf-8") as f:
-        json.dump(state, f, indent=2)
+        json.dump(s, f, indent=2)
 
-# ===================== LOCALAI =====================
-async def summarize_with_localai(text: str) -> Optional[str]:
-    payload = {
-        "model": LOCALAI_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "Summarize observed human communication in a neutral, "
-                    "formal, slightly uncanny tone. "
-                    "Do not use humor, emojis, or opinions."
-                )
-            },
-            {"role": "user", "content": text}
-        ],
-        "temperature": 0.4
-    }
-
-    headers = {
-        "Authorization": f"Bearer {LOCALAI_API_KEY}",
-        "Content-Type": "application/json"
-    }
-
-    async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=40)) as session:
-        async with session.post(
-            f"{LOCALAI_BASE_URL}/chat/completions",
-            json=payload,
-            headers=headers
-        ) as resp:
-            if resp.status != 200:
-                return None
-            data = await resp.json()
-            return data["choices"][0]["message"]["content"]
-
-# ===================== YOUTUBE =====================
-def parse_rss(xml_bytes: bytes) -> Optional[Dict[str, str]]:
+# ================= YOUTUBE =================
+def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
     root = ET.fromstring(xml_bytes)
     ns = {
         "a": "http://www.w3.org/2005/Atom",
         "yt": "http://www.youtube.com/xml/schemas/2015"
     }
-    entry = root.find("a:entry", ns)
-    if entry is None:
-        return None
-    return {
-        "video_id": entry.find("yt:videoId", ns).text,
-        "title": entry.find("a:title", ns).text,
-        "url": entry.find("a:link", ns).attrib["href"]
-    }
 
-async def fetch_latest_video() -> Optional[Dict[str, str]]:
+    videos = []
+    for entry in root.findall("a:entry", ns):
+        videos.append({
+            "video_id": entry.find("yt:videoId", ns).text,
+            "title": entry.find("a:title", ns).text,
+            "url": entry.find("a:link", ns).attrib["href"]
+        })
+    return videos
+
+async def fetch_videos():
     if not YT_CHANNEL_ID:
-        return None
-    async with aiohttp.ClientSession() as session:
-        async with session.get(YOUTUBE_RSS.format(YT_CHANNEL_ID)) as resp:
-            if resp.status != 200:
-                return None
-            return parse_rss(await resp.read())
+        return []
+    async with aiohttp.ClientSession() as s:
+        async with s.get(YOUTUBE_RSS.format(YT_CHANNEL_ID)) as r:
+            if r.status != 200:
+                return []
+            return parse_rss(await r.read())
 
-# ===================== DISCORD =====================
+# ================= TEEPUBLIC =================
+async def fetch_products():
+    if not TEEPUBLIC_STORE_URL:
+        return []
+
+    async with aiohttp.ClientSession() as s:
+        async with s.get(TEEPUBLIC_STORE_URL) as r:
+            if r.status != 200:
+                return []
+            html = await r.text()
+
+    soup = BeautifulSoup(html, "html.parser")
+    products = []
+
+    for card in soup.select("a[href*='/t-shirt']")[:10]:
+        title = card.get("title") or card.text.strip()
+        url = "https://www.teepublic.com" + card.get("href")
+        products.append({"title": title, "url": url})
+
+    return products
+
+# ================= DISCORD =================
 intents = discord.Intents.default()
 intents.guilds = True
-intents.messages = True
-intents.message_content = True
 
 client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
     state = load_state()
-    today = utc_today_key()
-
-    if state.get(today):
-        print("Daily run already completed")
+    if state.get(today_key()):
         await client.close()
         return
 
@@ -129,38 +107,41 @@ async def on_ready():
         await client.close()
         return
 
-    source = get(guild.text_channels, name=SUMMARY_SOURCE_CHANNEL)
-    target = get(guild.text_channels, name=SUMMARY_TARGET_CHANNEL)
+    # -------- YOUTUBE --------
     yt_channel = get(guild.text_channels, name=YT_TARGET_CHANNEL)
+    videos = await fetch_videos()
+    posted_ids = set(state.get("posted_videos", []))
 
-    # -------- DAILY SUMMARY (ALWAYS) --------
-    if source and target:
-        messages: List[str] = []
-        async for msg in source.history(limit=75):
-            if not msg.author.bot and msg.content:
-                messages.append(msg.content)
-
-        if messages:
-            summary = await summarize_with_localai("\n".join(messages))
-            if summary:
-                await target.send(
-                    "Daily observed communication summary:\n\n" + summary
+    if yt_channel:
+        for video in videos:
+            if video["video_id"] not in posted_ids:
+                await yt_channel.send(
+                    f"{video['title']}\n{video['url']}"
                 )
+                posted_ids.add(video["video_id"])
+                break
 
-    # -------- YOUTUBE CHECK (CONDITIONAL POST) --------
-    yt = await fetch_latest_video()
-    if yt and yt_channel:
-        if yt["video_id"] != state.get("yt_last_video_id"):
-            await yt_channel.send(
-                f"Externally hosted moving image detected:\n"
-                f"{yt['title']}\n{yt['url']}"
-            )
-            state["yt_last_video_id"] = yt["video_id"]
+    state["posted_videos"] = list(posted_ids)
+
+    # -------- TEEPUBLIC ROTATION --------
+    tee_channel = get(guild.text_channels, name=TEEPUBLIC_CHANNEL)
+    products = await fetch_products()
+
+    if tee_channel and products:
+        index = state.get("merch_index", 0) % len(products)
+        product = products[index]
+
+        await tee_channel.send(
+            f"Daily merchandise spotlight:\n\n"
+            f"{product['title']}\n"
+            f"{product['url']}"
+        )
+
+        state["merch_index"] = index + 1
 
     # -------- FINALIZE --------
-    state[today] = True
+    state[today_key()] = True
     save_state(state)
-    print("Daily run complete")
     await client.close()
 
 client.run(DISCORD_TOKEN)
