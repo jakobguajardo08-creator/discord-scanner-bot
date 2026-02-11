@@ -2,10 +2,7 @@ name: LuCha Daily Run
 
 on:
   schedule:
-    # Runs once per day at 12:00 UTC
     - cron: "0 12 * * *"
-
-  # Allows manual run from GitHub UI (for testing)
   workflow_dispatch:
 
 jobs:
@@ -24,16 +21,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install discord.py aiohttp
+          pip install discord.py aiohttp beautifulsoup4
 
       - name: Run LuCha
         env:
           DISCORD_TOKEN: ${{ secrets.DISCORD_TOKEN }}
           GUILD_ID: ${{ secrets.GUILD_ID }}
           YT_CHANNEL_ID: ${{ secrets.YT_CHANNEL_ID }}
-
-          LOCALAI_BASE_URL: ${{ secrets.LOCALAI_BASE_URL }}
-          LOCALAI_API_KEY: ${{ secrets.LOCALAI_API_KEY }}
-          LOCALAI_MODEL: ${{ secrets.LOCALAI_MODEL }}
-        run: |
-          python lucha.py
+          TEEPUBLIC_STORE_URL: ${{ secrets.TEEPUBLIC_STORE_URL }}
+        run: python lucha.py
