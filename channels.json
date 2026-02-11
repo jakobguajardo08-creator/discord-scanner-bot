@@ -4,6 +4,7 @@
       "type": "category",
       "name": "official-communications"
     },
+
     {
       "type": "text",
       "name": "externally-hosted-moving-images",
@@ -15,27 +16,70 @@
         }
       }
     },
+
     {
       "type": "text",
       "name": "commercial-goods",
       "category": "official-communications",
       "permissions": {
         "everyone": {
-          "send_messages": false
+          "send_messages": false,
+          "add_reactions": true
         }
       }
     },
+
     {
       "type": "category",
-      "name": "general-interaction"
+      "name": "community-interaction"
     },
+
     {
       "type": "text",
       "name": "unstructured-communication",
-      "category": "general-interaction",
+      "category": "community-interaction",
       "permissions": {
         "everyone": {
           "send_messages": true
+        }
+      }
+    },
+
+    {
+      "type": "text",
+      "name": "general-discussion",
+      "category": "community-interaction",
+      "permissions": {
+        "everyone": {
+          "send_messages": true
+        }
+      }
+    },
+
+    {
+      "type": "category",
+      "name": "audio-project"
+    },
+
+    {
+      "type": "text",
+      "name": "evaluation-of-recent-sounds",
+      "category": "audio-project",
+      "permissions": {
+        "everyone": {
+          "send_messages": true
+        }
+      }
+    },
+
+    {
+      "type": "voice",
+      "name": "simultaneous-listening-instance",
+      "category": "audio-project",
+      "permissions": {
+        "everyone": {
+          "connect": true,
+          "speak": true
         }
       }
     }
