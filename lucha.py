@@ -32,11 +32,20 @@ def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
 
     videos = []
     for entry in root.findall("a:entry", ns):
+        video_id = entry.find("yt:videoId", ns).text
+        title = entry.find("a:title", ns).text
+        url = entry.find("a:link", ns).attrib["href"]
+
+        # 🚫 Skip Shorts
+        if "/shorts/" in url.lower():
+            continue
+
         videos.append({
-            "video_id": entry.find("yt:videoId", ns).text,
-            "title": entry.find("a:title", ns).text,
-            "url": entry.find("a:link", ns).attrib["href"]
+            "video_id": video_id,
+            "title": title,
+            "url": url
         })
+
     return videos
 
 
@@ -121,7 +130,7 @@ async def on_ready():
         videos = await fetch_videos()
 
         if videos:
-            newest_video = videos[0]  # RSS gives newest first
+            newest_video = videos[0]  # newest non-short
             last_posted = get_last_posted_video()
 
             if newest_video["video_id"] != last_posted:
