@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import json
 import aiohttp
 import xml.etree.ElementTree as ET
 from typing import List, Dict
@@ -13,14 +14,52 @@ GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 YT_CHANNEL_ID = os.getenv("YT_CHANNEL_ID", "").strip()
 TEEPUBLIC_STORE_URL = os.getenv("TEEPUBLIC_STORE_URL", "").strip()
 
-YT_TARGET_CHANNEL = "externally-hosted-moving-images"
-TEEPUBLIC_CHANNEL = "commercial-goods"
+CHANNELS_FILE = "channels.json"
+LAST_VIDEO_FILE = "last_video.txt"
 
 YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
-LAST_VIDEO_FILE = "last_video.txt"
 
 if not DISCORD_TOKEN or not GUILD_ID:
     raise SystemExit("Missing DISCORD_TOKEN or GUILD_ID")
+
+# ================= LOAD CHANNEL CONFIG =================
+def load_channel_config():
+    if not os.path.exists(CHANNELS_FILE):
+        return {}
+    with open(CHANNELS_FILE, "r") as f:
+        return json.load(f)
+
+# ================= CHANNEL SYNC =================
+async def sync_channels(guild):
+    config = load_channel_config()
+    desired_structure = config.get("categories", {})
+
+    desired_channel_names = set()
+    desired_categories = set(desired_structure.keys())
+
+    # Create / get categories
+    category_objects = {}
+
+    for cat_name in desired_categories:
+        category = get(guild.categories, name=cat_name)
+        if not category:
+            category = await guild.create_category(cat_name)
+        category_objects[cat_name] = category
+
+        for channel_name in desired_structure[cat_name]:
+            desired_channel_names.add(channel_name)
+
+            existing = get(guild.text_channels, name=channel_name)
+            if not existing:
+                await guild.create_text_channel(
+                    channel_name,
+                    category=category
+                )
+
+    # Delete channels not in JSON
+    for channel in guild.text_channels:
+        if channel.name not in desired_channel_names:
+            await channel.delete()
 
 # ================= YOUTUBE =================
 def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
@@ -36,7 +75,7 @@ def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
         title = entry.find("a:title", ns).text
         url = entry.find("a:link", ns).attrib["href"]
 
-        # 🚫 Skip Shorts
+        # Skip Shorts
         if "/shorts/" in url.lower():
             continue
 
@@ -71,15 +110,12 @@ async def fetch_videos():
                 return []
             return parse_rss(await r.read())
 
-
 # ================= TEEPUBLIC =================
 async def fetch_products():
     if not TEEPUBLIC_STORE_URL:
         return []
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     async with aiohttp.ClientSession(headers=headers) as s:
         async with s.get(TEEPUBLIC_STORE_URL) as r:
@@ -99,7 +135,6 @@ async def fetch_products():
             url = "https://www.teepublic.com" + href
             products.append({"title": title, "url": url})
 
-    # Remove duplicates
     seen = set()
     unique = []
     for p in products:
@@ -108,7 +143,6 @@ async def fetch_products():
             unique.append(p)
 
     return unique[:5]
-
 
 # ================= DISCORD =================
 intents = discord.Intents.default()
@@ -124,13 +158,16 @@ async def on_ready():
         await client.close()
         return
 
+    # 🔥 Sync server structure
+    await sync_channels(guild)
+
     # ---------- YOUTUBE ----------
-    yt_channel = get(guild.text_channels, name=YT_TARGET_CHANNEL)
+    yt_channel = get(guild.text_channels, name="externally-hosted-moving-images")
     if yt_channel:
         videos = await fetch_videos()
 
         if videos:
-            newest_video = videos[0]  # newest non-short
+            newest_video = videos[0]
             last_posted = get_last_posted_video()
 
             if newest_video["video_id"] != last_posted:
@@ -140,7 +177,7 @@ async def on_ready():
                 save_last_posted_video(newest_video["video_id"])
 
     # ---------- TEEPUBLIC ----------
-    tee_channel = get(guild.text_channels, name=TEEPUBLIC_CHANNEL)
+    tee_channel = get(guild.text_channels, name="commercial-goods")
     if tee_channel:
         products = await fetch_products()
         if products:
