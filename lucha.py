@@ -13,22 +13,130 @@ from discord.utils import get
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 YT_CHANNEL_ID = os.getenv("YT_CHANNEL_ID", "").strip()
-TEEPUBLIC_STORE_URL = os.getenv("TEEPUBLIC_STORE_URL", "").strip()
 
 CHANNELS_FILE = "channels.json"
 LAST_VIDEO_FILE = "last_video.txt"
+LOG_CHANNEL_NAME = "overseer-log"
+DRY_RUN = False
+DELETION_DELAY = 0.3
 
 YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
 
 if not DISCORD_TOKEN or not GUILD_ID:
-    raise SystemExit("The Overseer requires credentials.")
+    raise SystemExit("Overseer requires credentials.")
 
 # ================= LOAD CONFIG =================
 def load_config():
     if not os.path.exists(CHANNELS_FILE):
-        return {}
+        return []
     with open(CHANNELS_FILE, "r") as f:
-        return json.load(f)
+        return json.load(f).get("channels", [])
+
+# ================= PERMISSION BUILDER =================
+def build_overwrites(guild, permissions_config):
+    overwrites = {}
+
+    if not permissions_config:
+        return overwrites
+
+    everyone_role = guild.default_role
+
+    if "everyone" in permissions_config:
+        perms = permissions_config["everyone"]
+        overwrite = discord.PermissionOverwrite()
+
+        for perm_name, value in perms.items():
+            setattr(overwrite, perm_name, value)
+
+        overwrites[everyone_role] = overwrite
+
+    return overwrites
+
+# ================= CHANNEL SYNC =================
+async def sync_channels(guild):
+    config_channels = load_config()
+    log_channel = get(guild.text_channels, name=LOG_CHANNEL_NAME)
+
+    if not log_channel:
+        log_channel = await guild.create_text_channel(LOG_CHANNEL_NAME)
+
+    protected_channels = {
+        guild.rules_channel,
+        guild.public_updates_channel,
+        guild.system_channel
+    }
+
+    desired_names = set()
+    changes = []
+
+    # --- First Pass: Categories ---
+    for entry in config_channels:
+        if entry["type"] == "category":
+            desired_names.add(entry["name"])
+            if not get(guild.categories, name=entry["name"]):
+                changes.append(f"Create category: {entry['name']}")
+                if not DRY_RUN:
+                    await guild.create_category(entry["name"])
+
+    # --- Second Pass: Channels ---
+    for entry in config_channels:
+        if entry["type"] == "category":
+            continue
+
+        name = entry["name"]
+        category_name = entry.get("category")
+        channel_type = entry["type"]
+        perms = entry.get("permissions")
+
+        desired_names.add(name)
+
+        category = get(guild.categories, name=category_name) if category_name else None
+        existing = get(guild.channels, name=name)
+
+        overwrites = build_overwrites(guild, perms)
+
+        if not existing:
+            changes.append(f"Create {channel_type}: {name}")
+            if not DRY_RUN:
+                if channel_type == "text":
+                    await guild.create_text_channel(name, category=category, overwrites=overwrites)
+                elif channel_type == "voice":
+                    await guild.create_voice_channel(name, category=category, overwrites=overwrites)
+        else:
+            # Update permissions if exists
+            if not DRY_RUN:
+                await existing.edit(overwrites=overwrites)
+
+    # --- Deletion Phase (ONLY delete managed channels not in JSON) ---
+    for channel in guild.channels:
+
+        if channel in protected_channels:
+            continue
+
+        if channel.name == LOG_CHANNEL_NAME:
+            continue
+
+        # Only delete if channel is in a category defined in JSON
+        if channel.name not in desired_names:
+
+            # Only delete if channel belongs to a category we manage
+            if channel.category and channel.category.name in [
+                e["name"] for e in config_channels if e["type"] == "category"
+            ]:
+
+                changes.append(f"Delete {channel.name}")
+                if not DRY_RUN:
+                    await asyncio.sleep(DELETION_DELAY)
+                    await channel.delete()
+
+    # --- Report ---
+    if changes:
+        summary = "\n".join(changes)
+        if DRY_RUN:
+            summary = "**DRY RUN — No changes applied**\n\n" + summary
+        await log_channel.send(f"Overseer Report:\n\n{summary}")
+    else:
+        await log_channel.send("Overseer Report:\nNo structural deviations detected.")
 
 # ================= YOUTUBE =================
 def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
@@ -77,81 +185,6 @@ async def fetch_videos():
                 return []
             return parse_rss(await r.read())
 
-# ================= CHANNEL SYNC =================
-async def sync_channels(guild):
-    config = load_config()
-
-    dry_run = config.get("dry_run", False)
-    deletion_delay = config.get("deletion_delay_seconds", 0)
-    log_channel_name = config.get("log_channel", "overseer-log")
-    managed_categories = config.get("managed_categories", {})
-
-    protected_channels = {
-        guild.rules_channel,
-        guild.public_updates_channel,
-        guild.system_channel
-    }
-
-    log_channel = get(guild.text_channels, name=log_channel_name)
-    if not log_channel:
-        log_channel = await guild.create_text_channel(log_channel_name)
-
-    changes = []
-
-    for cat_name, types in managed_categories.items():
-
-        category = get(guild.categories, name=cat_name)
-        if not category:
-            changes.append(f"Created category: {cat_name}")
-            if not dry_run:
-                category = await guild.create_category(cat_name)
-
-        desired_text = set(types.get("text", []))
-        desired_voice = set(types.get("voice", []))
-
-        # --- CREATE MISSING ---
-        if category:
-            for name in desired_text:
-                if not get(category.text_channels, name=name):
-                    changes.append(f"Created text channel: {name}")
-                    if not dry_run:
-                        await guild.create_text_channel(name, category=category)
-
-            for name in desired_voice:
-                if not get(category.voice_channels, name=name):
-                    changes.append(f"Created voice channel: {name}")
-                    if not dry_run:
-                        await guild.create_voice_channel(name, category=category)
-
-            # --- DELETE EXTRA ---
-            for channel in category.channels:
-
-                if channel in protected_channels:
-                    continue
-
-                if isinstance(channel, discord.TextChannel):
-                    if channel.name not in desired_text:
-                        changes.append(f"Deleted text channel: {channel.name}")
-                        if not dry_run:
-                            await asyncio.sleep(deletion_delay)
-                            await channel.delete()
-
-                if isinstance(channel, discord.VoiceChannel):
-                    if channel.name not in desired_voice:
-                        changes.append(f"Deleted voice channel: {channel.name}")
-                        if not dry_run:
-                            await asyncio.sleep(deletion_delay)
-                            await channel.delete()
-
-    # --- POST SUMMARY ---
-    if changes:
-        summary = "\n".join(changes)
-        if dry_run:
-            summary = "**DRY RUN MODE — No changes applied**\n\n" + summary
-        await log_channel.send(f"Overseer Report:\n\n{summary}")
-    else:
-        await log_channel.send("Overseer Report:\nNo structural anomalies detected.")
-
 # ================= DISCORD =================
 intents = discord.Intents.default()
 intents.guilds = True
@@ -168,7 +201,6 @@ async def on_ready():
 
     await sync_channels(guild)
 
-    # ---------- YOUTUBE ----------
     yt_channel = get(guild.text_channels, name="externally-hosted-moving-images")
     if yt_channel:
         videos = await fetch_videos()
