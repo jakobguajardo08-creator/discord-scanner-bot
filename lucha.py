@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 import discord
 from discord.utils import get
 
+# ================= ENV =================
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
 YT_CHANNEL_ID = os.getenv("YT_CHANNEL_ID", "").strip()
@@ -16,6 +17,7 @@ YT_TARGET_CHANNEL = "externally-hosted-moving-images"
 TEEPUBLIC_CHANNEL = "commercial-goods"
 
 YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
+LAST_VIDEO_FILE = "last_video.txt"
 
 if not DISCORD_TOKEN or not GUILD_ID:
     raise SystemExit("Missing DISCORD_TOKEN or GUILD_ID")
@@ -37,22 +39,29 @@ def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
         })
     return videos
 
+
+def get_last_posted_video():
+    if not os.path.exists(LAST_VIDEO_FILE):
+        return None
+    with open(LAST_VIDEO_FILE, "r") as f:
+        return f.read().strip()
+
+
+def save_last_posted_video(video_id):
+    with open(LAST_VIDEO_FILE, "w") as f:
+        f.write(video_id)
+
+
 async def fetch_videos():
+    if not YT_CHANNEL_ID:
+        return []
+
     async with aiohttp.ClientSession() as s:
         async with s.get(YOUTUBE_RSS.format(YT_CHANNEL_ID)) as r:
             if r.status != 200:
                 return []
             return parse_rss(await r.read())
 
-async def get_posted_video_ids(channel):
-    posted_ids = set()
-    async for msg in channel.history(limit=50):
-        if "youtube.com" in msg.content or "youtu.be" in msg.content:
-            parts = msg.content.split("v=")
-            if len(parts) > 1:
-                video_id = parts[1].split("&")[0].strip()
-                posted_ids.add(video_id)
-    return posted_ids
 
 # ================= TEEPUBLIC =================
 async def fetch_products():
@@ -76,6 +85,8 @@ async def fetch_products():
         href = link["href"]
         if "/t-shirt" in href:
             title = link.get("title") or link.text.strip()
+            if not title:
+                continue
             url = "https://www.teepublic.com" + href
             products.append({"title": title, "url": url})
 
@@ -88,6 +99,7 @@ async def fetch_products():
             unique.append(p)
 
     return unique[:5]
+
 
 # ================= DISCORD =================
 intents = discord.Intents.default()
@@ -107,14 +119,16 @@ async def on_ready():
     yt_channel = get(guild.text_channels, name=YT_TARGET_CHANNEL)
     if yt_channel:
         videos = await fetch_videos()
-        posted_ids = await get_posted_video_ids(yt_channel)
 
-        for video in videos:
-            if video["video_id"] not in posted_ids:
+        if videos:
+            newest_video = videos[0]  # RSS gives newest first
+            last_posted = get_last_posted_video()
+
+            if newest_video["video_id"] != last_posted:
                 await yt_channel.send(
-                    f"{video['title']}\n{video['url']}"
+                    f"{newest_video['title']}\n{newest_video['url']}"
                 )
-                break  # only one per run
+                save_last_posted_video(newest_video["video_id"])
 
     # ---------- TEEPUBLIC ----------
     tee_channel = get(guild.text_channels, name=TEEPUBLIC_CHANNEL)
