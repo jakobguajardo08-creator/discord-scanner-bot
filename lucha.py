@@ -20,46 +20,68 @@ LAST_VIDEO_FILE = "last_video.txt"
 YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
 
 if not DISCORD_TOKEN or not GUILD_ID:
-    raise SystemExit("Missing DISCORD_TOKEN or GUILD_ID")
+    raise SystemExit("The Overseer requires DISCORD_TOKEN and GUILD_ID.")
 
-# ================= LOAD CHANNEL CONFIG =================
+# ================= LOAD CONFIG =================
 def load_channel_config():
     if not os.path.exists(CHANNELS_FILE):
+        print("The Overseer cannot find channels.json. It will remember this.")
         return {}
     with open(CHANNELS_FILE, "r") as f:
         return json.load(f)
 
 # ================= CHANNEL SYNC =================
 async def sync_channels(guild):
+    print("Scanning the structure...")
     config = load_channel_config()
     desired_structure = config.get("categories", {})
 
     desired_channel_names = set()
     desired_categories = set(desired_structure.keys())
 
-    # Create / get categories
-    category_objects = {}
+    protected_channels = {
+        guild.rules_channel,
+        guild.public_updates_channel,
+        guild.system_channel
+    }
 
+    # Create categories + channels
     for cat_name in desired_categories:
         category = get(guild.categories, name=cat_name)
         if not category:
+            print(f"Manifesting category: {cat_name}")
             category = await guild.create_category(cat_name)
-        category_objects[cat_name] = category
 
         for channel_name in desired_structure[cat_name]:
             desired_channel_names.add(channel_name)
-
             existing = get(guild.text_channels, name=channel_name)
+
             if not existing:
+                print(f"Creating missing channel: {channel_name}")
                 await guild.create_text_channel(
                     channel_name,
                     category=category
                 )
 
-    # Delete channels not in JSON
+    # Delete unapproved channels
     for channel in guild.text_channels:
-        if channel.name not in desired_channel_names:
+
+        if channel in protected_channels:
+            print(f"Channel {channel.name} is protected. It remains.")
+            continue
+
+        if channel.name in desired_channel_names:
+            continue
+
+        try:
+            print(f"Erasing unauthorized channel: {channel.name}")
             await channel.delete()
+        except discord.Forbidden:
+            print(f"The Overseer was denied access to {channel.name}. Curious.")
+        except Exception as e:
+            print(f"Anomaly while deleting {channel.name}: {e}")
+
+    print("Structure stabilized.")
 
 # ================= YOUTUBE =================
 def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
@@ -75,8 +97,8 @@ def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
         title = entry.find("a:title", ns).text
         url = entry.find("a:link", ns).attrib["href"]
 
-        # Skip Shorts
         if "/shorts/" in url.lower():
+            print(f"Ignoring short-form anomaly: {title}")
             continue
 
         videos.append({
@@ -107,6 +129,7 @@ async def fetch_videos():
     async with aiohttp.ClientSession() as s:
         async with s.get(YOUTUBE_RSS.format(YT_CHANNEL_ID)) as r:
             if r.status != 200:
+                print("The feed did not respond.")
                 return []
             return parse_rss(await r.read())
 
@@ -120,6 +143,7 @@ async def fetch_products():
     async with aiohttp.ClientSession(headers=headers) as s:
         async with s.get(TEEPUBLIC_STORE_URL) as r:
             if r.status != 200:
+                print("The merchandise plane is silent.")
                 return []
             html = await r.text()
 
@@ -153,12 +177,14 @@ client = discord.Client(intents=intents)
 
 @client.event
 async def on_ready():
+    print("The Overseer has awakened.")
     guild = client.get_guild(GUILD_ID)
+
     if not guild:
+        print("The guild was not found. Something is wrong.")
         await client.close()
         return
 
-    # 🔥 Sync server structure
     await sync_channels(guild)
 
     # ---------- YOUTUBE ----------
@@ -171,22 +197,27 @@ async def on_ready():
             last_posted = get_last_posted_video()
 
             if newest_video["video_id"] != last_posted:
+                print(f"Broadcasting: {newest_video['title']}")
                 await yt_channel.send(
                     f"{newest_video['title']}\n{newest_video['url']}"
                 )
                 save_last_posted_video(newest_video["video_id"])
+            else:
+                print("No new transmissions detected.")
 
     # ---------- TEEPUBLIC ----------
     tee_channel = get(guild.text_channels, name="commercial-goods")
     if tee_channel:
         products = await fetch_products()
         if products:
+            print(f"Publishing merchandise: {products[0]['title']}")
             await tee_channel.send(
                 f"Store listing update:\n\n"
                 f"{products[0]['title']}\n"
                 f"{products[0]['url']}"
             )
 
+    print("The Overseer returns to dormancy.")
     await client.close()
 
 client.run(DISCORD_TOKEN)
