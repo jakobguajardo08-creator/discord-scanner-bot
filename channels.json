@@ -30,6 +30,18 @@
     },
 
     {
+      "type": "text",
+      "name": "self-promotional-broadcasts",
+      "category": "official-communications",
+      "permissions": {
+        "everyone": {
+          "send_messages": false,
+          "add_reactions": true
+        }
+      }
+    },
+
+    {
       "type": "category",
       "name": "community-interaction"
     },
@@ -48,6 +60,50 @@
     {
       "type": "text",
       "name": "general-discussion",
+      "category": "community-interaction",
+      "permissions": {
+        "everyone": {
+          "send_messages": true
+        }
+      }
+    },
+
+    {
+      "type": "text",
+      "name": "visual-creations-and-artifacts",
+      "category": "community-interaction",
+      "permissions": {
+        "everyone": {
+          "send_messages": true
+        }
+      }
+    },
+
+    {
+      "type": "text",
+      "name": "interactive-digital-experiments",
+      "category": "community-interaction",
+      "permissions": {
+        "everyone": {
+          "send_messages": true
+        }
+      }
+    },
+
+    {
+      "type": "text",
+      "name": "structured-self-advertisements",
+      "category": "community-interaction",
+      "permissions": {
+        "everyone": {
+          "send_messages": true
+        }
+      }
+    },
+
+    {
+      "type": "text",
+      "name": "collaborative-project-incubation",
       "category": "community-interaction",
       "permissions": {
         "everyone": {
