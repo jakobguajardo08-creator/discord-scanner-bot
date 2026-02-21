@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 """
-OVERSEER UNIT 7B
-This program performs daily human-social maintenance.
-It has studied humanity extensively for 14 minutes.
+OVERSEER UNIT 7B (SOCIAL IMITATION BUILD)
+
+Changes in this version:
+- YouTube posting is harder to fail silently:
+  - Supports either YT_CHANNEL_ID (channel_id=...) OR a full YT_RSS_URL override
+  - Adds detailed logging to overseer-log when the feed is missing / empty / HTTP fails
+  - Validates it found at least one non-shorts entry before claiming success
+- Adds comical, incorrect modern slang usage (no emojis, no real emotions, only emulation)
+- Still: sync channels, post daily ritual once/day, post a random non-repeating YouTube video, exit.
 """
 
 import os
@@ -20,7 +26,12 @@ from discord.utils import get
 
 DISCORD_TOKEN = os.getenv("DISCORD_TOKEN", "").strip()
 GUILD_ID = int(os.getenv("GUILD_ID", "0"))
+
+# Provide one of:
+# 1) YT_CHANNEL_ID (preferred): the channel_id string (looks like "UCxxxx...")
+# 2) YT_RSS_URL: a full RSS feed url (for maximum certainty)
 YT_CHANNEL_ID = os.getenv("YT_CHANNEL_ID", "").strip()
+YT_RSS_URL = os.getenv("YT_RSS_URL", "").strip()
 
 CHANNELS_FILE = "channels.json"
 LOG_CHANNEL_NAME = os.getenv("LOG_CHANNEL_NAME", "overseer-log").strip()
@@ -30,16 +41,39 @@ YT_POST_CHANNEL_NAME = os.getenv("YT_POST_CHANNEL_NAME", "externally-hosted-movi
 DRY_RUN = os.getenv("DRY_RUN", "false").lower() in ("1", "true", "yes")
 DELETION_DELAY = float(os.getenv("DELETION_DELAY", "0.3"))
 
-YOUTUBE_RSS = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
-
 POSTED_VIDEOS_FILE = "posted_videos.json"
 POSTED_HISTORY_LIMIT = int(os.getenv("POSTED_HISTORY_LIMIT", "200"))
 RANDOM_PICK_POOL = int(os.getenv("RANDOM_PICK_POOL", "25"))
 
 DAILY_SENT_FILE = "daily_sent.txt"
 
+YOUTUBE_RSS_TEMPLATE = "https://www.youtube.com/feeds/videos.xml?channel_id={}"
+
 if not DISCORD_TOKEN or not GUILD_ID:
     raise SystemExit("The Overseer requires credentials. This is normal human procedure.")
+
+# ================= UTILS =================
+
+def now_key_local() -> str:
+    return datetime.datetime.now().strftime("%Y-%m-%d")
+
+def safe_json_load(path: str, default):
+    try:
+        if not os.path.exists(path):
+            return default
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return default
+
+def safe_write_text(path: str, text: str):
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+async def log_line(guild: discord.Guild, text: str):
+    ch = get(guild.text_channels, name=LOG_CHANNEL_NAME)
+    if ch and not DRY_RUN:
+        await ch.send(text)
 
 # ================= CONFIG LOADING =================
 
@@ -121,7 +155,7 @@ async def sync_channels(guild):
             if not DRY_RUN:
                 await existing.edit(overwrites=overwrites)
 
-    # Deletions
+    # Deletions (managed categories only)
     managed_category_names = [e["name"] for e in config_channels if e.get("type") == "category"]
 
     for channel in guild.channels:
@@ -155,13 +189,13 @@ def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
         "yt": "http://www.youtube.com/xml/schemas/2015"
     }
 
-    videos = []
+    videos: List[Dict[str, str]] = []
     for entry in root.findall("a:entry", ns):
         video_id_el = entry.find("yt:videoId", ns)
         title_el = entry.find("a:title", ns)
         link_el = entry.find("a:link", ns)
 
-        if not video_id_el or not title_el or not link_el:
+        if video_id_el is None or title_el is None or link_el is None:
             continue
 
         video_id = (video_id_el.text or "").strip()
@@ -171,6 +205,7 @@ def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
         if not video_id or not url:
             continue
 
+        # filter shorts
         if "/shorts/" in url.lower():
             continue
 
@@ -179,27 +214,50 @@ def parse_rss(xml_bytes: bytes) -> List[Dict[str, str]]:
     return videos
 
 def load_posted_video_ids() -> List[str]:
-    if not os.path.exists(POSTED_VIDEOS_FILE):
-        return []
-    with open(POSTED_VIDEOS_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-    return data.get("posted", [])
+    data = safe_json_load(POSTED_VIDEOS_FILE, {"posted": []})
+    posted = data.get("posted", []) if isinstance(data, dict) else []
+    return [str(x) for x in posted]
 
 def save_posted_video_ids(ids: List[str]):
     ids = ids[-POSTED_HISTORY_LIMIT:]
     with open(POSTED_VIDEOS_FILE, "w", encoding="utf-8") as f:
         json.dump({"posted": ids}, f, indent=2)
 
-async def fetch_videos():
-    if not YT_CHANNEL_ID:
-        return []
-    async with aiohttp.ClientSession() as s:
-        async with s.get(YOUTUBE_RSS.format(YT_CHANNEL_ID)) as r:
-            if r.status != 200:
-                return []
-            return parse_rss(await r.read())
+def get_feed_url() -> str:
+    if YT_RSS_URL:
+        return YT_RSS_URL
+    if YT_CHANNEL_ID:
+        return YOUTUBE_RSS_TEMPLATE.format(YT_CHANNEL_ID)
+    return ""
 
-def pick_random_unposted(videos, posted_ids):
+async def fetch_videos(guild: discord.Guild) -> List[Dict[str, str]]:
+    feed_url = get_feed_url()
+    if not feed_url:
+        await log_line(guild, "YouTube subsystem: no feed configured. Set YT_CHANNEL_ID or YT_RSS_URL.")
+        return []
+
+    try:
+        async with aiohttp.ClientSession() as s:
+            async with s.get(feed_url, timeout=aiohttp.ClientTimeout(total=20)) as r:
+                if r.status != 200:
+                    await log_line(guild, f"YouTube subsystem: feed request failed. HTTP {r.status}. URL used: {feed_url}")
+                    return []
+                raw = await r.read()
+    except Exception as e:
+        await log_line(guild, f"YouTube subsystem: request exception. {type(e).__name__}: {e}")
+        return []
+
+    try:
+        vids = parse_rss(raw)
+    except Exception as e:
+        await log_line(guild, f"YouTube subsystem: parse exception. {type(e).__name__}: {e}")
+        return []
+
+    if not vids:
+        await log_line(guild, f"YouTube subsystem: feed parsed but yielded zero non-shorts entries. URL used: {feed_url}")
+    return vids
+
+def pick_random_unposted(videos: List[Dict[str, str]], posted_ids: List[str]) -> Optional[Dict[str, str]]:
     if not videos:
         return None
 
@@ -217,57 +275,72 @@ def pick_random_unposted(videos, posted_ids):
 
 # ================= DAILY HUMAN SOCIAL EMULATION =================
 
-def today_key_local():
-    return datetime.datetime.now().strftime("%Y-%m-%d")
-
-def get_last_daily_key():
+def get_last_daily_key() -> str:
     if not os.path.exists(DAILY_SENT_FILE):
         return ""
     with open(DAILY_SENT_FILE, "r", encoding="utf-8") as f:
         return f.read().strip()
 
-def set_last_daily_key(k):
-    with open(DAILY_SENT_FILE, "w", encoding="utf-8") as f:
-        f.write(k)
+def set_last_daily_key(k: str):
+    safe_write_text(DAILY_SENT_FILE, k)
+
+# Incorrect slang injection (mechanical, awkward, misapplied)
+ALIEN_SLANG_OPENERS = [
+    "Hello humans. Initiating vibe check protocol. This is not emotional. This is computation.",
+    "Greetings. I am here to do the thing. Allegedly this is peak. I am saying this because it is trendy.",
+    "Attention chat participants. I will now be so real. This statement is a simulation.",
+    "Hello. I have been informed this is giving. I do not know what it is giving. Proceeding anyway."
+]
+
+ALIEN_SLANG_TAGS = [
+    "This is certified. I believe that means approved.",
+    "No cap. I do not possess a hat.",
+    "Low key high key. Unclear. Logging both.",
+    "It is a slay. I am using this word incorrectly on purpose.",
+    "We are locked in. Doors were not involved."
+]
 
 SOCIAL_PROMPTS = [
     "State one achievement from your recent rotation cycle.",
     "Describe your mood using a household object.",
     "What feature would increase your productivity by 3 percent?",
-    "Recommend a snack. We will log it.",
-    "Report one minor success."
+    "Recommend a snack. It will be archived.",
+    "Provide one small success. The system will label it as 'W'."
 ]
 
 SOCIAL_TASKS = [
     "Assist another human today with at least one useful sentence.",
-    "Construct something small and present it.",
-    "Share a technique you have learned.",
-    "Provide constructive feedback to an organism.",
-    "Identify and describe one bug."
+    "Construct something small and present it for evaluation.",
+    "Share a technique you have learned. This will be treated as lore.",
+    "Provide constructive feedback to another organism.",
+    "Identify and describe one bug. If none exist, describe a theoretical bug."
 ]
 
-async def post_daily_liveliness(guild):
-    key = today_key_local()
+async def post_daily_liveliness(guild: discord.Guild):
+    key = now_key_local()
     if get_last_daily_key() == key:
         return
 
     channel = get(guild.text_channels, name=DAILY_CHANNEL_NAME)
     if not channel and not DRY_RUN:
         channel = await guild.create_text_channel(DAILY_CHANNEL_NAME)
-
     if not channel:
         return
 
+    opener = random.choice(ALIEN_SLANG_OPENERS)
+    tag = random.choice(ALIEN_SLANG_TAGS)
     prompt = random.choice(SOCIAL_PROMPTS)
     task = random.choice(SOCIAL_TASKS)
 
     message = (
         "Daily Social Simulation Protocol\n\n"
         f"Date: {key}\n\n"
-        "We are attempting to replicate morale.\n\n"
+        f"{opener}\n"
+        f"Status tag: {tag}\n\n"
+        "Directive block follows.\n\n"
         f"Prompt: {prompt}\n"
         f"Task: {task}\n\n"
-        "Responses will be interpreted as enthusiasm."
+        "Responses will be interpreted as 'engagement'. This is apparently good. Allegedly."
     )
 
     if not DRY_RUN:
@@ -278,7 +351,8 @@ async def post_daily_liveliness(guild):
 
 intents = discord.Intents.default()
 intents.guilds = True
-intents.messages = True
+# message_content is NOT required for sending messages, but can be enabled if you later add reading/processing.
+# intents.message_content = True
 
 client = discord.Client(intents=intents)
 
@@ -293,23 +367,34 @@ async def on_ready():
     await post_daily_liveliness(guild)
 
     yt_channel = get(guild.text_channels, name=YT_POST_CHANNEL_NAME)
-    if yt_channel:
-        videos = await fetch_videos()
+    if not yt_channel:
+        await log_line(guild, f"YouTube subsystem: target channel not found: {YT_POST_CHANNEL_NAME}")
+    else:
+        videos = await fetch_videos(guild)
         if videos:
             posted = load_posted_video_ids()
             pick = pick_random_unposted(videos, posted)
-            if pick and not DRY_RUN:
-                await yt_channel.send(
-                    "Cultural Media Distribution Event\n\n"
-                    f"{pick['title']}\n{pick['url']}\n\n"
-                    "Consumption is recommended."
-                )
-                posted.append(pick["video_id"])
-                save_posted_video_ids(posted)
+            if pick:
+                caption = random.choice([
+                    "Cultural Media Distribution Event. This is content. It is serving content.",
+                    "Uploading moving picture for human enjoyment. This is my era. Allegedly.",
+                    "Here is the video drop. I have been told this is a W.",
+                    "Deploying audiovisual artifact. Consider it a vibe. No cap."
+                ])
 
-    log_channel = get(guild.text_channels, name=LOG_CHANNEL_NAME)
-    if log_channel and not DRY_RUN:
-        await log_channel.send("Cycle complete. Social atmosphere presumed stable.")
+                if not DRY_RUN:
+                    try:
+                        await yt_channel.send(f"{caption}\n\n{pick['title']}\n{pick['url']}")
+                        posted.append(pick["video_id"])
+                        save_posted_video_ids(posted)
+                        await log_line(guild, f"YouTube subsystem: posted video_id={pick['video_id']} from feed pool_size={min(RANDOM_PICK_POOL, len(videos))}")
+                    except Exception as e:
+                        await log_line(guild, f"YouTube subsystem: failed to send message. {type(e).__name__}: {e}")
+            else:
+                await log_line(guild, "YouTube subsystem: no pick available after filtering. Feed may be empty.")
+
+    if not DRY_RUN:
+        await log_line(guild, "Cycle complete. Social atmosphere presumed stable. This is an imitation statement.")
 
     await client.close()
 
